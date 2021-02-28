@@ -10,12 +10,12 @@ The article presents statistical models for multi-observer methods that allow es
 ## Data supplements
 Necessary files for each of four data supplements are provided in separate subdirectories. In addition to instructions for usage, documentation in metadata files lists required and optional R packages. 
   - DataS1: Example R Code
-  - DataS2: Input Files for Simulation Analyses
-  - DataS3: R Code for Simulation Analyses
+  - DataS2: Input Files for Simulations
+  - DataS3: R Code for Simulations
   - DataS4: Analyses of Murrelet Survey Data
 
 DataS1 provides simple examples of multi-observer method models, with R code, example input, and example output. 
-DataS2 and DataS3 provide input files and R code to replicate simulation study in the article or to conduct user-specified simulations. 
+DataS2 and DataS3 provide input files and R code to replicate simulation study described in the companion article or to conduct user-specified simulations. 
 DataS4 provides data and R code used to conduct statistical analyses of multi-observer method models applied to line transect surveys for Kittlitz’s and marbled murrelets in Glacier Bay, Alaska, USA. 
 ## Development
 Any updated version(s) of this software will be available at my [GitHub repository](https://github.com/StevenHoekman). 
