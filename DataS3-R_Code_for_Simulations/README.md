@@ -1,0 +1,2 @@
+## Summary
+R source code for a simulation engine for multi-observer methods. This engine can replicate the simulation study of multi-observer methods (using input files in DataS2) described in the companion article and also allows user-specified simulation analyses. MetadataS3.pdf documents usage, including descriptions of R source code files, models and analyses supported by the simulation engine, workflow for simulation analyses, and formatting of summarized simulation output.
