@@ -593,7 +593,9 @@ if (model == "M") {
           ) %dopar% {
             if (sim_profiles$Model[1] == "M.theta.p") {
               optim(
-                parameters_ini[parameters_index ,], optimize.M.theta.p.f, gr = NULL, 
+                parameters_ini[parameters_index ,], 
+                optimize.M.theta.p.f, 
+                gr = NULL, 
                 dat = sim_data[[1]][which(sim_data[[1]]$id == fail_tmp[i]),], 
                 sim_profile = sim_profiles[sim, ],
                 hessian = T, 
@@ -602,9 +604,11 @@ if (model == "M") {
                 upper = constraints_up, 
                 control = cont
               )
-            }else if (sim_profiles$Model[1] == "M.theta") {
+            }else if (sim_profiles$Model[1] == "M.theta" | model == "M.theta.ps") {
               optim(
-                parameters_ini[parameters_index ,], optimize.M.theta.f, gr = NULL, 
+                parameters_ini[parameters_index ,], 
+                optimize.M.theta.f, 
+                gr = NULL, 
                 dat = sim_data[[1]][which(sim_data[[1]]$id == fail_tmp[i]),], 
                 keys = sim_data[[2]],
                 sim_profile = sim_profiles[sim, ],
@@ -715,7 +719,8 @@ if (model == "M") {
               # Optimization for models with logit regression predicting classification probabilities only for primary observers
               optim(
                 parameters_ini[parameters_index, ], 
-                optimize.M.theta.p.f, gr = NULL,
+                optimize.M.theta.p.f, 
+                gr = NULL,
                 dat = data.bootstrap[[1]][which(data.bootstrap[[1]]$id == i),],
                 sim_profile = sim_profiles[sim, ],
                 hessian = T, 
@@ -728,7 +733,8 @@ if (model == "M") {
               # Optimization for models with logit regression predicting classification probabilities for all observers
               optim(
                 parameters_ini[parameters_index, ], 
-                optimize.M.theta.f, gr = NULL,
+                optimize.M.theta.f, 
+                gr = NULL,
                 dat = data.bootstrap[[1]][which(data.bootstrap[[1]]$id == i),],
                 keys = data.bootstrap[[2]],
                 sim_profile = sim_profiles[sim, ],
@@ -998,7 +1004,8 @@ if (model == "M") {
           # Optimization for model with covariate predicting true species probabilities (psi)
           optim(
             parameters_ini[parameters_index, ], 
-            optimize.M.psi.f, gr = NULL,
+            optimize.M.psi.f, 
+            gr = NULL,
             dat = sim_data[[1]][which(sim_data[[1]]$id == i), ],
             keys = sim_data[[2]],
             keys_psi = sim_data[[3]],
@@ -1013,7 +1020,8 @@ if (model == "M") {
           # Optimization for model with covariates predicting classification probabilities (theta) and true species probabilities (psi)
             optim(
               parameters_ini[parameters_index, ], 
-              optimize.M.theta.psi.f, gr = NULL,
+              optimize.M.theta.psi.f, 
+              gr = NULL,
               dat = sim_data[[1]][which(sim_data[[1]]$id == i), ],
               sim_profile = sim_profiles[sim, ],
               hessian = T, 
@@ -1053,7 +1061,8 @@ if (model == "M") {
             if (sim_profiles$Model[1] == "M.psi") {
               optim(
                 parameters_ini[parameters_index ,], 
-                optimize.M.psi.f, gr = NULL, 
+                optimize.M.psi.f, 
+                gr = NULL, 
                 dat = sim_data[[1]][which(sim_data[[1]]$id == fail_tmp[i]),], 
                 keys = sim_data[[2]],
                 keys_psi = sim_data[[3]],
@@ -1067,7 +1076,8 @@ if (model == "M") {
             }else if (sim_profiles$Model[1] == "M.theta.psi" | model == "M.theta+psi") {
               optim(
                 parameters_ini[parameters_index ,], 
-                optimize.M.theta.psi.f, gr = NULL, 
+                optimize.M.theta.psi.f, 
+                gr = NULL, 
                 dat = sim_data[[1]][which(sim_data[[1]]$id == fail_tmp[i]),], 
                 sim_profile = sim_profiles[sim, ],
                 hessian = T, 
@@ -1204,7 +1214,8 @@ if (model == "M") {
               # Optimization for model with separate covariates predicting classification probabilities (theta) and true species probabilities (psi)
               optim(
                 parameters_ini[parameters_index, ], 
-                optimize.M.theta.psi.f, gr = NULL,
+                optimize.M.theta.psi.f, 
+                gr = NULL,
                 dat = data.bootstrap[[1]][which(data.bootstrap[[1]]$id == i), ],
                 sim_profile = sim_profiles[sim, ],
                 hessian = T, 
