@@ -1,9 +1,8 @@
 # Multi-Observer-Methods
 Multi-Observer Methods for Estimating Uncertain Species Identification
 
-DOI link
 ## Summary
-Release version 1.01 of this repository archives data and novel R computer code used in the companion article: 
+Release version 1.0.0 of this repository archives data and novel R computer code used in the companion article: 
   - Hoekman, Steven T. 2021. Multi-observer methods for estimating uncertain species identification. Ecosphere. 
  
 The article presents statistical models for multi-observer methods that allow estimation of uncertain species identification (species misidentification and partial identification, which is identification to the lowest certain taxon) during population ecology surveys that involve enumerating individuals. Each Data Supplement (described below) provides necessary R computer code, files, and documentation. Analyses were conducted in the [R Statistical Computing Environment]( https://www.r-project.org/) version 3.6. 
