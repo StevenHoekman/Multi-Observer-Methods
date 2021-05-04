@@ -1,5 +1,5 @@
 "Metadata and common inputs rows 1-9, distinct models on rows 10+",,,,,,,,,,,,,
-"Distinct observer simulations for MOM model M(2,2){p,s} with 2 classification states, 2 true species states, a primary observer, and distinct secondary observers",,,,,,,,,,,,,
+"Distinct observer simulations for MOM model M(2,2){s} with 2 observation states, 2 true species states, a primary observer, and 3 distinct secondary observers",,,,,,,,,,,,,
 "Groups of size 1 (g=1), homogeneous groups (g>1), heterogeneous groups (pi>0)",,,,,,,,,,,,,
 ,,,,,,,,,,,,,
 Model,reps,A,B,O_p,O_s,mx_model,n_bins,n_bootstrap,t_limit,,,,

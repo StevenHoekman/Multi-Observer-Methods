@@ -1,10 +1,10 @@
 # Supplemental_functions.R
-# Supplemental functions for analyses and summaries, version 1.01
+# Supplemental functions for analyses and summaries, version 1.0.0
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
-# R computer code with supplemental functions for simulation analyses for multi-observer models for estimating uncertain identification. In support of the main simulation engine, these functions provide supplemental services such as: random sampling from probability distributions; computing probabilities and other value used in likelihood computations; and generating, formatting, summarizing, and error-checking simulation data and output. Functions are grouped according to their purpose. Comments with each function describe its purpose, inputs and outputs, and functioning of the code.  
+# R computer code with supplemental functions for simulation analyses for estimating uncertain identification using multi-observer methods. These functions provide supplemental services such as: drawing random samples from probability distributions; computing probabilities and other values used in likelihood computations; and generating, formatting, summarizing, and error-checking simulation data and statistical output. Functions are grouped according by purpose. Comments with each function describe its purpose, inputs and outputs, and functioning of the code. Code developed and tested in R version 3.6.
 
-# This code should be executed prior to conducting simulations
+# This code should be executed prior to conducting simulation analyses in 'simulations_R_code.R'
 
 ###############################################################################
 #             Utility functions
@@ -473,7 +473,7 @@ group.probability.psi.constant.f <- function(p, m, g) {
   return(list(pi, m, pen))
 }
 
-# Function: {group.probability.encounter.pro.f}: Calculates group probabilities (pi) for homogeneous or heterogeneous (limited to 3 true species states) groups. For heterogeneous groups, uses the "encounter" group probability model described in the companion article in Appendix S3: Eqs. S2, S3. Accepts inputs of a matrix of true species probabilities 'p' for individual observation records (rows), heterogeneous group parameters 'm', and a vector of unique observed group sizes 'g'. Returns a list with group probabilities, heterogeneous group parameters, and a penalty term to the -log(likelihood) for violating model constraints.
+# Function: {group.probability.encounter.pro.f}: Calculates group probabilities (pi) for homogeneous or heterogeneous (limited to 3 true species states) groups. For heterogeneous groups, uses the "encounter" group probability model described in the companion article in Appendix S3: Eqs. S3, S4. Accepts inputs of a matrix of true species probabilities 'p' for individual observation records (rows), heterogeneous group parameters 'm', and a vector of unique observed group sizes 'g'. Returns a list with group probabilities, heterogeneous group parameters, and a penalty term to the -log(likelihood) for violating model constraints.
 
 group.probability.psi.encounter.f <- function(p, m, g) {
   
@@ -487,7 +487,7 @@ group.probability.psi.encounter.f <- function(p, m, g) {
   pen <- 0 # Penalty term for violating model constraints
   
   if (any(m > 0)) {
-    ## Group-level group probabilities with heterogeneous groups using "encounter" model. For clarity, terms follow Appendix S3: Eqs. S2, S3 in the companion article
+    ## Group-level group probabilities with heterogeneous groups using "encounter" model. For clarity, terms follow Appendix S3: Eqs. S3, S4 in the companion article
     # Here, 'pi' is "delta" term in Appendix S3 (group probabilities prior to heterogeneous groups forming)
     delta <- pi
     
@@ -691,7 +691,7 @@ generate.ini.f <- function(profiles, par) {
 #             Functions for formatting simulation data
 ###############################################################################
 
-# Function: {format.MOM.data.f} Summarizes and formats simulated survey observations. If applicable, also adds 1) unique key values (to survey data) and a separate key table for unique observed groups for each observer in each simulation repetition and 2) unique key values (to survey data) and a separate key table for unique covariate values (predicting true species probabilities) for all simulation repetitions.
+# Function: {format.MOM.data.f} Summarizes and formats simulated survey observations. If applicable, also adds 1) unique key values (to survey data) and a separate key table for unique observed groups for each observer in each simulation replicate and 2) unique key values (to survey data) and a separate key table for unique covariate values (predicting true species probabilities) for all simulation replicates.
 # Accepts inputs of simulated survey observations 'data.obs', number of observation states 'A', number of primary/secondary survey observers 'O_ps', heterogeneous group parameters 'mix', and the number of bins for covariate values 'n_bins'. Returns list with 3 elements: 1) data frame with summarized and formatted simulated survey data, 2) data frame with key table for unique observed groups, and 3) data frame with key table for unique covariate values. If not applicable, keys values are not included in simulated survey data and corresponding list elements (2) and (3) for key tables are NULL.
 
 format.MOM.data.f <- function(data.obs, A, O_ps, mix, n_bins) {
@@ -753,7 +753,7 @@ format.MOM.data.f <- function(data.obs, A, O_ps, mix, n_bins) {
   # Add total count of classifications for each keyed observed group
   tmp[[2]] <- mutate(tmp[[2]], sum = as.integer(rowSums(tmp[[2]][, 1:A])))
   
-  # For models with covariate predicting true species probabilities, add key value for unique covariate values across all simulation repetitions 
+  # For models with covariate predicting true species probabilities, add key value for unique covariate values across all simulation replicates 
   if (length(grep("covariate_psi", colnames(dat))) > 0) {
     unique.cov.psi <-  
       distinct(dat, covariate_psi) %>%
@@ -770,7 +770,7 @@ format.MOM.data.f <- function(data.obs, A, O_ps, mix, n_bins) {
   return(tmp)
 } 
 
-# Function: {generate.keys.f} Generates unique key values for unique observed groups in each simulation repetition and key tables for unique observed groups. Accepts inputs of simulated survey data 'dat', # of survey observers 'obs', and # of observation states 'A'. Returns list with 2 elements: 1) matrix 'out' containing key values for unique observed groups for each observer in each simulation repetition and 2) matrix 'unique.key' with a key table for unique observed groups. 
+# Function: {generate.keys.f} Generates unique key values for unique observed groups in each simulation replicate and key tables for unique observed groups. Accepts inputs of simulated survey data 'dat', # of survey observers 'obs', and # of observation states 'A'. Returns list with 2 elements: 1) matrix 'out' containing key values for unique observed groups for each observer in each simulation replicate and 2) matrix 'unique.key' with a key table for unique observed groups. 
 
 generate.keys.f <- function(dat, obs, A) {
   # Isolate classification data in 'd'
@@ -793,7 +793,7 @@ generate.keys.f <- function(dat, obs, A) {
   
   unique.key <- bind_cols(unique.key, tibble(key = 1:nrow(unique.key)))
   
-  # Data frame 'out' contains unique key values for unique observed groups within each simulation repetition (indexed by 'id') with columns labeled for each observer
+  # Data frame 'out' contains unique key values for unique observed groups within each simulation replicate (indexed by 'id') with columns labeled for each observer
   
   out <-
     bind_cols(llply(1:obs, function(x)
@@ -853,7 +853,7 @@ generate.keys.theta.f <- function(dat, obs, A) {
 #             Functions for summarizing simulation output
 ###############################################################################
 
-# Function: {model.results.f} For models from simulation analyses, adds standard errors and confidence limits to parameter estimates, and summarizes estimates, standard errors, and confidence interval coverage. Accepts inputs of list of model results 'results', vector of true parameter values 'par.t', count of successful simulation repetitions 'r', and vector with number of parameters of each type 'n' (regression intercept, regression slope, logit, group size, heterogeneous group). Returns data frame with 3 matrices containing parameter estimates, estimated standard errors, and confidence interval coverage for parameter estimates. In each matrix, columns correspond to parameters and rows to simulation repetitions. 
+# Function: {model.results.f} For models from simulation analyses, adds standard errors and confidence limits to parameter estimates, and summarizes estimates, standard errors, and confidence interval coverage. Accepts inputs of list of model results 'results', vector of true parameter values 'par.t', count of successful simulation replicates 'r', and vector with number of parameters of each type 'n' (regression intercept, regression slope, logit, group size, heterogeneous group). Returns data frame with 3 matrices containing parameter estimates, estimated standard errors, and confidence interval coverage for parameter estimates. In each matrix, columns correspond to parameters and rows to simulation replicates. 
 
 model.results.f <- function(results, par.t, r, n) {
 
@@ -903,7 +903,7 @@ model.results.f <- function(results, par.t, r, n) {
   out
 }
 
-# Function: {model.results.het.s.f} For models from simulation analyses with un-modeled heterogeneity among secondary observers, adds standard errors and confidence limits to parameter estimates, and summarizes estimates, standard errors, and confidence interval coverage. Accepts inputs of list of model results 'results', vector of true parameter values 'par.t', count of successful simulation repetitions 'r', vector with number of true parameters of each type 'n' (regression intercept, regression slope, logit, group size, heterogeneous group), vector with number of estimated parameters of each type 'n.est', and vector 'par.d' indicating classification parameters in true model but not estimation model. Returns data frame with 3 matrices containing parameter estimates, estimated standard errors, and confidence interval coverage for parameter estimates. In each matrix, columns correspond to parameters and rows to simulation repetitions. 
+# Function: {model.results.het.s.f} For models from simulation analyses with un-modeled heterogeneity among secondary observers, adds standard errors and confidence limits to parameter estimates, and summarizes estimates, standard errors, and confidence interval coverage. Accepts inputs of list of model results 'results', vector of true parameter values 'par.t', count of successful simulation replicates 'r', vector with number of true parameters of each type 'n' (regression intercept, regression slope, logit, group size, heterogeneous group), vector with number of estimated parameters of each type 'n.est', and vector 'par.d' indicating classification parameters in true model but not estimation model. Returns data frame with 3 matrices containing parameter estimates, estimated standard errors, and confidence interval coverage for parameter estimates. In each matrix, columns correspond to parameters and rows to simulation replicates. 
 
 model.results.het.s.f <- function(results, par.t, r, n, n.est, par.d) {
   
@@ -970,7 +970,7 @@ model.results.het.s.f <- function(results, par.t, r, n, n.est, par.d) {
   out
 }
 
-# Function: {summarise.results.f} Summarizes model output for each distinct model across successful repetitions. Accepts inputs of data frame parameter output for each simulation repetition 'parameters', a vector of true values of estimated parameters 'par.t', and the count of successful simulation repetitions 'r'. Returns a vector with (for each estimated parameter): means, standard deviations, mean standard errors, mean CV (coefficient of variation = SE of estimate / mean of estimate), mean error (parameter estimate - true parameter value), root mean square error, and 95% confidence interval coverage. 
+# Function: {summarise.results.f} Summarizes model output for each distinct model across successful replicates. Accepts inputs of data frame parameter output for each simulation replicate 'parameters', a vector of true values of estimated parameters 'par.t', and the count of successful simulation replicates 'r'. Returns a vector with (for each estimated parameter): means, standard deviations, mean standard errors, mean CV (coefficient of variation = SE of estimate / mean of estimate), mean error (parameter estimate - true parameter value), root mean square error, and 95% confidence interval coverage. 
 
 summarise.results.f <- function(parameters, par.t, r){
   
@@ -1477,14 +1477,14 @@ logit.ci.f <- function(p, s) {
 # 'output.betas' containing summarized statistics for overall means for true species probabilities and for classification probabilities from prior distinct models 
 
 # Returns list of output including;
-# output.betas' containing  summarized statistics (mean, root mean square error, 95% CI coverage) across simulation repetitions for overall mean true species probabilities and classification probabilities. Contains results for the current and all prior distinct models.
-# 'betas' containing (for each simulation repetition) estimated regression coefficients and estimated means, SEs, confidence limits, and 95% confidence interval coverage for overall mean true species probabilities and classification probabilities
+# output.betas' containing  summarized statistics (mean, root mean square error, 95% CI coverage) across simulation replicates for overall mean true species probabilities and classification probabilities. Contains results for the current and all prior distinct models.
+# 'betas' containing (for each simulation replicate) estimated regression coefficients and estimated means, SEs, confidence limits, and 95% confidence interval coverage for overall mean true species probabilities and classification probabilities
 
 psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, parameter.output, output.betas) {
   
   # Optional output for derived estimates of overall mean true species probabilities (psi) and classification probabilities (theta)
   
-  # 'tmp.id' and 'n.sim' contain an index and the count of simulation repetitions successfully optimizing
+  # 'tmp.id' and 'n.sim' contain an index and the count of simulation replicates successfully optimizing
   # 'tmp.betas.psi' and 'tmp.betas.theta' contain estimated intercept and slope parameters for regression coefficients predicting true species probabilities (psi) and classification probabilities (theta)
   tmp.id <- unique(sim.data.tmp$id)
   n.sim <- rep(sim, reps)
@@ -1625,7 +1625,7 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
           #          ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][4]) * (theta.s.12.lg.U > sim.data[[4]][[2]][4])
           #   )
           
-          # Output matrix 'betas' contains results for individual simulation repetitions: estimated regression coefficients, estimated overall mean true species probabilities and classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
+          # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean true species probabilities and classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
           
           betas <- rbind(betas, 
                          cbind(tmp.betas.psi, 
@@ -1641,7 +1641,7 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
                                n.sim = n.sim)
           )
           
-          # Output data frame 'output.betas' contains results for each simulation summarized across repetitions: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
+          # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
           
           output.betas <- 
             bind_cols(tmp.psi, tmp.theta) %>%
@@ -1696,7 +1696,7 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
                    ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][2]) * (theta.s.12.lg.U > sim.data[[4]][[2]][2])
             )
           
-          # Output matrix 'betas' contains results for individual simulation repetitions: estimated regression coefficients, estimated overall mean true species probabilities and classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
+          # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean true species probabilities and classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
           
           betas <- rbind(betas, 
                          cbind(tmp.betas.psi, 
@@ -1710,7 +1710,7 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
                                n.sim = n.sim)
           )
           
-          # Output data frame 'output.betas' contains results for each simulation summarized across repetitions: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
+          # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
           
           output.betas <- 
             bind_cols(tmp.psi, tmp.theta) %>%
@@ -1741,7 +1741,7 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
       } else {
         ## ----- Model only includes covariate predicting true species probabilities -----
         
-        # Output matrix 'betas' contains results for individual simulation repetitions: estimated regression coefficients, estimated overall mean true species probabilities and classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
+        # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean true species probabilities and classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
         
         betas <- rbind(betas, 
                        cbind(tmp.betas.psi, 
@@ -1759,7 +1759,7 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
         #                     sim.data.tmp[which(sim.data.tmp$id == tmp.id[x]),],
         #                     n_parameters))
         
-        # Output data frame 'output.betas' contains results for each simulation summarized across repetitions: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
+        # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
           mutate(tmp.psi, 
@@ -1828,7 +1828,7 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
                ci.lg.psi.3 = (psi.3.lg.L < sim.data[[4]][[1]][3]) * (psi.3.lg.U > sim.data[[4]][[1]][3])
         )
       
-      # Output matrix 'betas' contains results for individual simulation repetitions: estimated regression coefficients, estimated overall mean true species probabilities and classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
+      # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean true species probabilities and classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
       
       betas <- rbind(betas, 
                      cbind(tmp.betas.psi, 
@@ -1838,7 +1838,7 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
                            psi.3.t = sim.data[[4]][[1]][[3]], 
                            n.sim = n.sim))
       
-      # Output data frame 'output.betas' contains results for each simulation summarized across repetitions: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
+      # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
       
       output.betas <- 
         mutate(tmp.psi, 
@@ -1878,14 +1878,14 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
 # 'output.betas' containing summarized statistics for overall means for classification probabilities from prior distinct models 
 
 # Returns list of output with:
-# 'output.betas' containing  summarized statistics (mean, root mean square error, 95% CI coverage) across simulation repetitions for overall mean classification probabilities. Contains results for the current and all prior distinct models.
-# 'betas' containing (for each simulation repetition) estimated regression coefficients and estimated means, SEs, confidence limits, and 95% confidence interval coverage for overall mean true species probabilities and classification probabilities
+# 'output.betas' containing  summarized statistics (mean, root mean square error, 95% CI coverage) across simulation replicates for overall mean classification probabilities. Contains results for the current and all prior distinct models.
+# 'betas' containing (for each simulation replicate) estimated regression coefficients and estimated means, SEs, confidence limits, and 95% confidence interval coverage for overall mean true species probabilities and classification probabilities
 
 theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.output, output.betas) {
 
   # Optional output for derived estimates of overall mean true species probabilities (psi) and classification probabilities (theta)-
   
-  # 'tmp.id' and 'n.sim' contain an index and the count of simulation repetitions successfully optimizing
+  # 'tmp.id' and 'n.sim' contain an index and the count of simulation replicates successfully optimizing
   # 'tmp.betas' contains estimated intercept and slope parameters for regression coefficients predicting classification probabilities
   
   tmp.id <- unique(sim.data.tmp$id)
@@ -1956,7 +1956,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                  ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][4]) * (theta.s.12.lg.U > sim.data[[4]][[2]][4])
           )
         
-        # Output matrix 'betas' contains results for individual simulation repetitions: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
+        # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
         
         betas <- 
           rbind(betas, 
@@ -1969,7 +1969,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                       n.sim = n.sim)
           )
         
-        # Output data frame 'output.betas' contains results for each simulation summarized across repetitions: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
+        # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
           mutate(tmp.theta, 
@@ -2020,7 +2020,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                  ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][2]) * (theta.s.12.lg.U > sim.data[[4]][[2]][2])
           )
         
-        # Output matrix 'betas' contains results for individual simulation repetitions: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
+        # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
         
         betas <- 
           rbind(betas, 
@@ -2031,7 +2031,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                       n.sim = n.sim)
           )
         
-        # Output data frame 'output.betas' contains results for each simulation summarized across repetitions: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
+        # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
           mutate(tmp.theta, 
@@ -2115,7 +2115,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                  ci.lg.theta.s.32 = (theta.s.32.lg.L < sim.data[[4]][[2]][2, 4]) * (theta.s.32.lg.U > sim.data[[4]][[2]][2, 4])
           )
         
-        # Output matrix 'betas' contains results for individual simulation repetitions: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
+        # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
         
         betas <- 
           rbind(betas, 
@@ -2132,7 +2132,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                       n.sim = n.sim)
           )
         
-        # Output data frame 'output.betas' contains results for each simulation summarized across repetitions: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
+        # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
           mutate(tmp.theta, 
@@ -2207,7 +2207,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                  ci.lg.theta.s.32 = (theta.s.32.lg.L < sim.data[[4]][[2]][2, 2]) * (theta.s.32.lg.U > sim.data[[4]][[2]][2, 2])
           )
         
-        # Output matrix 'betas' contains results for individual simulation repetitions: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
+        # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
         
         betas <- 
           rbind(betas, 
@@ -2220,7 +2220,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                       n.sim = n.sim)
           )
         
-        # Output data frame 'output.betas' contains results for each simulation summarized across repetitions: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
+        # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
           mutate(tmp.theta, 
@@ -2328,7 +2328,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                  ci.lg.theta.s.23 = (theta.s.23.lg.L < sim.data[[4]][[2]][2, 6]) * (theta.s.23.lg.U > sim.data[[4]][[2]][2, 6])
           )
         
-        # Output matrix 'betas' contains results for individual simulation repetitions: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
+        # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
         
         betas <-  
           rbind(betas, 
@@ -2351,7 +2351,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                       n.sim = n.sim)
           )
         
-        # Output data frame 'output.betas' contains results for each simulation summarized across repetitions: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
+        # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
           mutate(tmp.theta, 
@@ -2455,7 +2455,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                  ci.lg.theta.s.23 = (theta.s.23.lg.L < sim.data[[4]][[2]][2, 3]) * (theta.s.23.lg.U > sim.data[[4]][[2]][2, 3])
           )
         
-        # Output matrix 'betas' contains results for individual simulation repetitions: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
+        # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
         
         betas <-  
           rbind(betas, 
@@ -2471,7 +2471,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                       n.sim = n.sim)
           )
         
-        # Output data frame 'output.betas' contains results for each simulation summarized across repetitions: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
+        # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
           mutate(tmp.theta, 
@@ -2539,7 +2539,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                  ci.lg.theta.p.12 = (theta.p.12.lg.L < sim.data[[4]][[2]][2]) * (theta.p.12.lg.U > sim.data[[4]][[2]][2])
           )
         
-        # Output matrix 'betas' contains results for individual simulation repetitions: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
+        # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
         
         betas <- 
           rbind(betas, 
@@ -2550,7 +2550,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                       n.sim = n.sim)
           )
         
-        # Output data frame 'output.betas' contains results for each simulation summarized across repetitions: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
+        # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
           mutate(tmp.theta, 
@@ -2607,7 +2607,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                  ci.lg.theta.p.32 = (theta.p.32.lg.L < sim.data[[4]][[2]][2, 2]) * (theta.p.32.lg.U > sim.data[[4]][[2]][2, 2])
           )
         
-        # Output matrix 'betas' contains results for individual simulation repetitions: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
+        # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
         
         betas <- 
           rbind(betas, 
@@ -2620,7 +2620,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                       n.sim = n.sim)
           )
         
-        # Output data frame 'output.betas' contains results for each simulation summarized across repetitions: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
+        # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
           mutate(tmp.theta, 
@@ -2693,7 +2693,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                  ci.lg.theta.p.23 = (theta.p.23.lg.L < sim.data[[4]][[2]][2, 3]) * (theta.p.23.lg.U > sim.data[[4]][[2]][2, 3])
           )
         
-        # Output matrix 'betas' contains results for individual simulation repetitions: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
+        # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
         
         betas <-  
           rbind(betas, 
@@ -2709,7 +2709,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                       n.sim = n.sim)
           )
         
-        # Output data frame 'output.betas' contains results for each simulation summarized across repetitions: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
+        # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
           mutate(tmp.theta, 
@@ -2754,8 +2754,8 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
 
 # Accepts inputs of:
 # 'sim.data' containing containing simulated survey data
-# 'tmp.theta' containing  estimates of mean classification probabilities and associated standard errors and confidence intervals for each simulation repetition (rows) of the current distinct model
-# 'tmp.theta.boot' containing estimated mean classification probabilities for each bootstrap re-sample of each simulation repetition (rows) of the current distinct model 
+# 'tmp.theta' containing  estimates of mean classification probabilities and associated standard errors and confidence intervals for each simulation replicate (rows) of the current distinct model
+# 'tmp.theta.boot' containing estimated mean classification probabilities for each bootstrap re-sample of each simulation replicate (rows) of the current distinct model 
 # 'output.boot' with summarized bootstrap estimates of standard errors and confidence interval coverage for estimates of mean classification probabilities for each distinct simulation model (rows)
 
 # Returns data frame 'output.boot', appending summarized bootstrap estimates for the current distinct simulation model
@@ -3454,8 +3454,8 @@ theta.bootstrap.f <- function(sim.data, tmp.theta, tmp.theta.boot, output.boot) 
 
 # Accepts inputs of:
 # 'sim.data' and 'sim.data.tmp' containing simulated survey data 
-# 'tmp.psi' containing  estimates of mean true species probabilities and associated standard errors and confidence intervals for each simulation repetition (rows) of the current distinct model
-# 'tmp.psi.boot' containing estimated mean true species probabilities for each bootstrap re-sample of each simulation repetition (rows) of the current distinct model
+# 'tmp.psi' containing  estimates of mean true species probabilities and associated standard errors and confidence intervals for each simulation replicate (rows) of the current distinct model
+# 'tmp.psi.boot' containing estimated mean true species probabilities for each bootstrap re-sample of each simulation replicate (rows) of the current distinct model
 # 'output.boot' with summarized bootstrap estimates of standard errors and confidence interval coverage for estimates of mean true species probabilities for each distinct simulation model (rows)
 
 # Returns data frame 'output.boot', appending summarized bootstrap estimates for the current distinct simulation model

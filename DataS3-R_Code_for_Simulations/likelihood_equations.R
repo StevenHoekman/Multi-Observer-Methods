@@ -1,10 +1,10 @@
 # likelihood_equations.R
-# Generates R list objects with pre-computed values for likelihood equations, version 1.01
+# Generates R list objects with pre-computed values for likelihood equations, version 1.0.0
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
-# This code generates list objects 'likelihood.equations' composed of three types of elements: 1) 'true.combinations.g.[size]' containing a matrix with possible combinations of true groups for groups of each [size], 2) 'true.permutations.count.g.[size]' containing a vector with counts of possible permutations for each combination for a group true group of each [size], and 3) 'observed.[observed group]' containing a data frame summarizing equations for computing probabilities of the [observed group] specified by counts of individuals classified to each true species state. These lists substantially increase speed of model optimization. Required lists for conducting simulation analyses described Metadata S3 in DataS3 are provided in DataS2. Code below produces these lists to user specifications for the number of observation states (A), number of true species states (B), and the range of group sizes (g). See Metadata S3 in for addition details.
+# This code generates list objects 'likelihood_equations' composed of three types of elements: 1) 'true.combinations.g.[size]' containing a matrix with possible combinations of true groups for groups of each [size], 2) 'true.permutations.count.g.[size]' containing a vector with counts of possible permutations for each combination for a group true group of each [size], and 3) 'observed.[observed group]' containing a data frame summarizing equations for computing probabilities of the [observed group] specified by counts of individuals classified to each true species state. These lists substantially increase speed of model optimization. Required lists for conducting simulation study described in the companion article and MetadataS3 are provided in DataS2. Code below produces these lists to user specifications for the number of observation states (A), number of true species states (B), and the range of group sizes (g). See MetadataS3.pdf in for addition details. Code developed and tested in R version 3.6.
 
-# This optional code does not need to be executed prior to conducting simulation analyses
+# This code does NOT need to be executed prior to conducting simulation analyses in 'simulations_R_code.R'
 
 ###############################################################################
 #             Required R libraries

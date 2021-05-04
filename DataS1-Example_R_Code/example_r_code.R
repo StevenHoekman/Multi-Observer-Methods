@@ -1,9 +1,9 @@
 # example_r_code.R
-# Version 1.01
+# Version 1.0.0
 # R code for examples demonstrating estimation of uncertain identification using multi-observer methods
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
-# These 5 examples provide diverse examples of multi-observer methods. Each include simulated survey data, input files specifying initial values and constraints for parameters, a function for conducting statistical analyses, and example statistical output. Models, parameter naming conventions, and methods for executing analyses are described in 'Metadata S1 : Example R code for estimating uncertain species identification using multi-observer methods.' Statistical methods are described in the companion article. 
+# These 5 examples provide diverse examples of multi-observer methods. Each include simulated survey data, input files specifying initial values and constraints for parameters, a function for conducting statistical analyses, and example statistical output. Models, parameter naming conventions, and methods for executing analyses are described in 'Metadata S1 : Example R code for estimating uncertain species identification using multi-observer methods.' Statistical methods are described in the companion article. Code developed and tested in R version 3.6.
 
 ###############################################################################
 #               Load R packages
@@ -236,7 +236,8 @@ example.1.f <- function(parameters, dat) {
 }
 
 # Specify initial parameter values. Entered probability values are logit-transformed before analyses.
-parameters_ini_1 <- qlogis(c(seq(0.2, 0.1, length.out = 12), 0.3, 0.25))
+parameters_ini_1 <-
+  qlogis(c(seq(0.2, 0.1, length.out = 12), 0.3, 0.25))
 
 # Specify lower box constraints for parameter values
 constraints_low_1 <- c(rep(-9.21024, 14))
@@ -442,7 +443,8 @@ parameters_ini_2 <- c(qlogis(c(0.2, 0.1, 0.4)), 1.2, 1.3)
 # Specify lower and upper constraints for parameter values. Upper constraints of infinity (Inf) result in estimates without upper constraints. 
 constraints_low_2 <- c(rep(-9.2, 3), rep(1.002, 2))
 constraints_up_2 <- c(rep(-1.4, 2), rep(Inf, 3))
-names(parameters_ini_2) <- names(constraints_low_2) <- names(constraints_up_2) <- c("theta_s1_21",	"theta_s1_12", 	"psi_1",	"g_1",	"g_2")
+names(parameters_ini_2) <- names(constraints_low_2) <- names(constraints_up_2) <- 
+  c("theta_s1_21",	"theta_s1_12", 	"psi_1",	"g_1",	"g_2")
 
 # The 'optim' function solves for parameter values minimizing the -log(likelihood). Vectors 'constraints_low_2' and 'constraints_up_2' specify lower and upper box constraints. 
 model_2 <- 
@@ -535,12 +537,15 @@ example.3.f <- function(parameters, dat) {
 }
 
 # Specify initial parameter values. Probabilities (thetas) are logit-transformed before analyses.
-parameters_ini_3 <- c(-1, 0.5, qlogis(seq(0.25, 0.1, length.out = 8)))
+parameters_ini_3 <-
+  c(-1, 0.5, qlogis(seq(0.25, 0.1, length.out = 8)))
 
 # Specify lower constraints for parameter values
 constraints_low_3 <- c(-5, -5, rep(-9.2, 8))
 names(parameters_ini_3) <- names(constraints_low_3) <- c(
-  "b0_psi_1",	"b1_psi_1",	"theta_p_21",	"theta_p_31",	"theta_p_12",	"theta_p_32",	"theta_s1_21",	"theta_s1_31",	"theta_s1_12",	"theta_s1_32"
+  "b0_psi_1",	"b1_psi_1",	
+  "theta_p_21",	"theta_p_31",	"theta_p_12",	"theta_p_32",	
+  "theta_s1_21",	"theta_s1_31",	"theta_s1_12",	"theta_s1_32"
 )
 
 # The 'optim' function solves for parameter values minimizing the -log(likelihood). Vector 'constraints_low_3' specifies lower box constraints. 
@@ -552,7 +557,8 @@ model_3 <-
     dat = data_3,
     hessian = T,
     method = c("L-BFGS-B"),
-    lower = constraints_low_3
+    lower = constraints_low_3,
+    control = list(trace = 3)
   )
 
 ###############################################################################
@@ -699,7 +705,12 @@ example.4.f <- function(parameters, dat) {
 }
 
 # Specify initial parameter values. True species probability (psi) and heterogeneous group probability (pi) are logit-transformed before analyses, and group size parameters are mean group size.
-parameters_ini_4 <- c( c(seq(-3, -5, length.out = 4), seq(-1, 2, length.out = 4), qlogis(0.4)),  1.2,  1.3, qlogis(0.01))
+parameters_ini_4 <-
+  c(c(seq(-3,-5, length.out = 4), 
+      seq(-1, 2, length.out = 4), 
+      qlogis(0.4)),  
+    1.2,  1.3, 
+    qlogis(0.01))
 
 # Specify lower constraints for parameter values
 constraints_low_4 <- c(rep(-9.2, 4), rep(-5, 4), -9.2, rep(1.002, 2), -7)
@@ -717,7 +728,8 @@ model_4 <-
     dat = data_4,
     hessian = T,
     method = c("L-BFGS-B"),
-    lower = constraints_low_4
+    lower = constraints_low_4,
+    control = list(trace = 3)
   )
 
 ###############################################################################
@@ -793,7 +805,9 @@ parameters_ini_5 <- qlogis(c(seq(0.2, 0.1, length.out = 8), 0.4))
 # Specify lower constraints for parameter values
 constraints_low_5 <- c(rep(-9.21024, 9))
 names(parameters_ini_5) <- names(constraints_low_5) <- c(
-  "theta_p_21",	"theta_p_12",	"theta_s1_21",	"theta_s1_12",	"theta_s2_21",	"theta_s2_12",	"theta_s3_21",	"theta_s3_12",	"psi_1"
+  "theta_p_21",	"theta_p_12",	
+  "theta_s1_21",	"theta_s1_12",	"theta_s2_21",	"theta_s2_12",	"theta_s3_21",	"theta_s3_12",	
+  "psi_1"
 )
 
 # The 'optim' function solves for parameter values minimizing the -log(likelihood). Vector 'constraints_low_5' specifies lower box constraints.

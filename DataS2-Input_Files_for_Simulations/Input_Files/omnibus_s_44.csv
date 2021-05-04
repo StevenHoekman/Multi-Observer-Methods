@@ -1,5 +1,5 @@
 "Metadata and common inputs rows 1-9, distinct models on rows 10+",,,,,,,,,,,,,,,,,,,,,,,,,,
-"Omnibus simulations for SOM model S(4,4) with 4 classification states, 4 true species states, and identical secondary observers",,,,,,,,,,,,,,,,,,,,,,,,,,
+"Omnibus simulations for SOM model S(4,4) with 4 observation states, 4 true species states, and 3 identical secondary observers",,,,,,,,,,,,,,,,,,,,,,,,,,
 "Groups of size 1 (g=1), homogeneous groups (g>1)",,,,,,,,,,,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,,,,,,,,,,,,
 Model,reps,A,B,O_p,O_s,mx_model,n_bins,n_bootstrap,t_limit,,,,,,,,,,,,,,,,,

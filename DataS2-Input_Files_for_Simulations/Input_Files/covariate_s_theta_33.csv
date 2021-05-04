@@ -1,5 +1,5 @@
 "Metadata and common inputs rows 1-9, distinct models on rows 10+",,,,,,,,,,,,,,,,,,,,,
-"Covariate simulations for SOM model M(3,3){cov(theta)} with a covariate predicting classification probabilities, 3 classification states, 3 true species states, and identical secondary observers",,,,,,,,,,,,,,,,,,,,,
+"Covariate simulations for SOM model M(3,3){cov(theta)} with a covariate predicting classification probabilities, 3 observation states, 3 true species states, and 3 identical secondary observers",,,,,,,,,,,,,,,,,,,,,
 "Groups of size 1 (g=1), homogeneous groups (g>1)",,,,,,,,,,,,,,,,,,,,,
 ,,,,,,,,,,,,,,,,,,,,,
 Model,reps,A,B,O_p,O_s,mx_model,n_bins,n_bootstrap,t_limit,,,,,,,,,,,,

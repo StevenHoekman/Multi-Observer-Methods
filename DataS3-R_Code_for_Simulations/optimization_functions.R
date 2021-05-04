@@ -1,10 +1,10 @@
 # optimization_functions.R
-# Functions for likelihood optimization of multi-observer models estimating uncertain identification, version 1.01
+# Functions for likelihood optimization of models estimating uncertain identification using multi-observer methods, version 1.0.0
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
-# R computer code for optimizing multi-observation method (MOM) and single-observation method (SOM) models for estimating uncertain species identification by minimizing the -log(likelihood). These functions are designed to conduct simulation analyses described in the companion article and Appendix S3 therein. Each function optimizes models with differing predictive covariates, as described in comments of r each function and in DataS3. 
+# R computer code for optimizing multi-observation method (MOM) and single-observation method (SOM) models for estimating uncertain species identification by minimizing the -log(likelihood). These functions are designed to conduct simulation analyses described in the companion article and Appendices S1 to S3. Each function optimizes models with differing predictive covariates, as described in comments of each function and in MetadataS3.pdf. Code developed and tested in R version 3.6.
 
-# This code should be executed prior to conducting simulation analyses
+# This code should be executed prior to conducting simulation analyses in 'simulations_R_code.R'
 
 ###############################################################################
 #               Function Inputs/Outputs 
@@ -12,14 +12,18 @@
 
 # These functions accept inputs of:
 # (1) Initial parameter values 'param'
-# (2) Simulated data for a single survey 'dat'
-# (3) Optional tables of key values for unique observed groups 'keys' or unique covariate values 'keys_psi'
+# (2) Formatted simulated data for a single survey 'dat'
+# (3) Optional tables of key values for unique observed groups 'keys' or unique binned covariate values 'keys_psi'
 # (4) A simulation profile defining simulation and model inputs 'sim_profile' 
 
 # Likelihoods are computed using keyed tables (if present) or otherwise using unique observation histories 
 # User-defined penalty functions constrain optimization to avoid unrealistic or inadmissible parameter values
 
-# Output is the -log(likelihood) plus any penalty terms
+# These functions produce output of:
+# (1) Parameter estimates
+# (2) The -log(likelihood) plus any penalty terms
+# (3) Codes indicating success of optimization
+# (4) The Hessian matrix
 
 # These functions require an external input file containing a list object 'likelihood_equations' with pre-computed values for likelihood computations. See DataS2. 
 

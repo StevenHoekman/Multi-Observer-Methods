@@ -1,6 +1,6 @@
 "Metadata and common inputs rows 1-9, distinct models on rows 10+",,,,,,,,,,
-"Covariate simulations for SOM model M(2,2){cov(psi+theta)} with indepedent covariates predicting true species probabilities and classification probabilities, 2 classification states, 2 true species states, and identical secondary observers",,,,,,,,,,
-"Groups of size 1 (g=1), homogeneous groups (g>1), heterogeneous groups (pi>0)",,,,,,,,,,
+"Covariate simulations for SOM model M(2,2){cov(psi+theta)} with indepedent covariates predicting true species probabilities and classification probabilities, 2 observation states, 2 true species states, and 3 identical secondary observers",,,,,,,,,,
+"Groups of size 1 (g=1), homogeneous groups (g>1), heterogeneous groups (rho>0)",,,,,,,,,,
 ,,,,,,,,,,
 Model,reps,A,B,O_p,O_s,mx_model,n_bins,n_bootstrap,t_limit,
 M.theta.psi,99,2,2,0,3,encounter,20,0,0,

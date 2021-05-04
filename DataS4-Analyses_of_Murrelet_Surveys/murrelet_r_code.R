@@ -1,9 +1,9 @@
 # murrelet_r_code.R
-# Version 1.01
+# Version 1.0.0
 # R code for estimating uncertain identification for 2 species of murrelets 
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
-# This code conducts statistical analyses using multi-observation method models to estimate uncertain identification for 2 species of murrelets during line transect surveys in Glacier Bay, Alaska, USA during July 2014. Details of conducting analyses and of parameter naming conventions are provided in Metadata S4: Input Files and R Computer Code for Analyses of Glacier Bay Murrelet Survey Data. Descriptions of the statistical model and its parameters are provided in the companion article in Appendix S5: Methods and Results for Application of MOM Models to Line Transect Surveys for Murrelets. 
+# This code conducts statistical analyses using multi-observation method models to estimate uncertain identification for 2 species of murrelets during line transect surveys in Glacier Bay, Alaska, USA during July 2014. Details of conducting analyses and of parameter naming conventions are provided in Metadata S4: Input Files and R Computer Code for Analyses of Glacier Bay Murrelet Survey Data. Descriptions of the statistical model and its parameters are provided in the companion article in Appendix S5: Methods and Results for Application of MOM Models to Line Transect Surveys for Murrelets. Code was developed and tested using R version 3.6.
 
 ###############################################################################
 #             Load R packages
@@ -358,7 +358,9 @@ tmp_s <-
 
 # Combine initial parameter values into one file and add parameter names
 parameters_ini <- c(tmp_p, tmp_s, b1_distance_p, b1_distance_s, b2_distance_p, b1_precipitation, qlogis(psi_1[1]), psi_1[2], qlogis(pi_12), group_size_distribution)
-parameter_names <- c("b0_distance_p_12", "b0_distance_p_13", "b0_distance_s_12", "b0_distance_s_13", "b1_distance_p_12", "b1_distance_p_13", "b1_distance_s_12", "b2_distance_p_13", "b1_precipitation_p", "b1_precipitation_s", "psi_1_low", "psi_1_high",  "pi_12", "tau_1", "q", "omega_1", "tau_2", "omega_2")
+parameter_names <- 
+  c("b0_distance_p_21", "b0_distance_p_31", "b0_distance_s_21", "b0_distance_s_31", "b1_distance_p_21", "b1_distance_p_31", "b1_distance_s_21", "b2_distance_p_31", 
+    "b1_precipitation_p", "b1_precipitation_s", "psi_1_low", "psi_1_high",  "pi_12", "tau_1", "q", "omega_1", "tau_2", "omega_2")
 names(parameters_ini) <- parameter_names
 
 ## Specify lower and upper box constraints for each parameter ----------
@@ -419,5 +421,6 @@ model <-
         hessian = T, 
         method = c("L-BFGS-B"),
         lower = constraint_low,
-        upper = constraint_up
+        upper = constraint_up,
+        control = list(trace = 3) 
   )

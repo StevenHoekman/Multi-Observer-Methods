@@ -1,8 +1,8 @@
 # simulations_R_code.R
-# Simulation engine for estimating uncertain identification, version 1.01
+# Simulation engine for estimating uncertain identification using multi-observer methods, version 1.0.0
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
-# R computer code used to conduct "omnibus", "covariate", and "distinct observer" simulations. Simulations rely on input files in .csv file format (described in Data S2), which can be altered to conduct user-specified simulations. For multiple-observation method (MOM) and single-observation (SOM) method models and 2 to 4 species, simulated survey data are generated and analyzed, with summarized statistical output written to .csv format files. Descriptions of statistical methods are provided in the companion article and Appendix S2 therein. Descriptions of R objects containing simulated survey data ('sim_data'), statistical output fro models ('model_results'), and summarized simulation output ('output') are provided in Data S3. 
+# R computer code used to conduct "omnibus", "covariate", and "distinct observer" simulation analyses using multi-observer methods. Simulations rely on input in .csv file format (described in DataS2), which can be altered to conduct user-specified simulations. For multiple-observation method (MOM) and single-observation (SOM) method models and 2 to 4 species, code generates and analyzes simulated survey data, with summary output written to .csv format files. Descriptions of statistical methods are provided in the companion article and Appendices S1 to S3. Descriptions of R objects containing simulated survey data ('sim_data'), statistical output ('model_results'), and summarized simulation output ('output_global') are provided in DataS3. Code developed and tested in R version 3.6.
  
 ###############################################################################
 #           Required functions
@@ -20,36 +20,36 @@
 # Install and load prior to executing code below
 library(plyr)   # Programming tools, data manipulation
 library(dplyr)  # Data frame manipulation
-library(doSNOW) # Back end for parallel execution
+library(doSNOW) # Back end for parallel code execution
 library(mrds)   # Delta method for arbitrary functions
 library(actuar) # Truncated Poisson distributions
-library(nnet)   # Log-linear multinomial models (only for Multinomial model sims) 
+library(nnet)   # Log-linear multinomial models (only required for observed proportions models) 
 
 ###############################################################################
 #     Register the 'doSNOW' parallel execution back end
 ###############################################################################
 
-# Make cluster 'cl' with user-specified # of CPU workers (in parentheses). At least 1 worker is required for the 'foreach' construct, while >1 allows parallel processing of simulations. Typically, the number of workers shouldn't exceed the number of available CPU threads.
+# Make cluster 'cl' with user-specified # of CPU workers (in parentheses). At least 1 worker is required for the 'foreach' construct, while >1 allows parallel processing of simulations. Typically, the number of workers should be ≤ the # of available CPU threads.
 
-cl <- makeCluster(8)
+cl <- makeCluster(4)
 registerDoSNOW(cl)
 
-# AFTER completing all simulation analyses, un-register the cluster 'cl' to remove the workers from computer RAM.
+# AFTER completing all simulation analyses, un-register the cluster 'cl' to remove CPU workers from RAM.
 stopCluster(cl) 
 
 ###############################################################################
 #          Import simulation profile(s)
 ###############################################################################
   
-## Run this code in this section before each simulation,
-# Exception: the 'likelihood.equations' lists only need to be loaded at start or between simulation analyses when the number of true species states B or classification states A in simulations is altered
+## Run this code in this section before each simulation
+# Exception: the 'likelihood.equations' lists only need to be loaded at start or between simulation analyses when altering true species states B or classification states A
 
-# Import user-specified simulations from .csv format input files, and specify file name for simulation output
-# Do not include .csv file extension 'in_filename'
-in_filename <- "covariate_m_theta_22"
+# User-specified .csv format input/output files for simulations
+# Do not include .csv file extension
+in_filename <- "omnibus_m_22_example"
 out_filename <- paste(in_filename, "_output.csv", sep = "")
 
-# Vectors 'sim.const' and 'sim_variables' contain simulation inputs that are constant/variable across simulations
+# Vectors 'sim.const'/'sim_variables' contain simulation inputs that are constant/variable across distinct models
 sim_constants <- as.list(read.csv(paste(in_filename, ".csv" , sep = ""), header = T, skip = 4, nrows = 1, as.is = T)[, 1:10])
 sim_variables <- read.csv(paste(in_filename, ".csv" , sep = ""), header = T, skip = 9, as.is = T)
 sim_variables <- sim_variables[, grep("X", colnames(sim_variables), invert = T)]
@@ -59,31 +59,36 @@ sim_constants <- format.sim.constant.f(sim_constants)
 sim_profiles <- generate.sim.profiles.f(sim_constants, sim_variables) 
 profiles_names <- names(sim_profiles) # Field names
 
-# Vector 'parameter_names_global' contains parameters names across all simulations 
-parameters_names_global <- c(grep("b0|b1|psi|theta", profiles_names, value = T)) 
+# Vector 'parameter_names_global' contains parameters names across all models
+parameters_names_global <-
+  c(grep("b0|b1|psi|theta", profiles_names, value = T))
 if (any(sim_profiles[grep("^g_[0123456789]", profiles_names)] > 1)) {
-  parameters_names_global <- c(parameters_names_global, grep("^g_[0123456789]", profiles_names, value = T))}
+  parameters_names_global <-
+    c(parameters_names_global,
+      grep("^g_[0123456789]", profiles_names, value = T))
+}
 mix_col <- grep("mix", profiles_names) # Column #s of parameters for estimating heterogeneous groups
 if (any(sim_profiles[, mix_col] > 0)) {
-  parameters_names_global <- c(parameters_names_global, profiles_names[mix_col])}
+  parameters_names_global <- c(parameters_names_global, profiles_names[mix_col])
+}
 
 model <- sim_profiles$Model[1] # Model specification
 A <- sim_profiles$A[1]; B <- sim_profiles$B[1] # # of observation (A) and true species (B) states 
-reps <- sim_profiles$reps[1] # Simulation repetitions for each distinct model
-n_bootstrap <- sim_profiles$n_bootstrap[1] # Number of bootstrap samples (optional for models with covariates)
+reps <- sim_profiles$reps[1] # Simulation replicates for each distinct model
+n_bootstrap <- sim_profiles$n_bootstrap[1] # Number of bootstrap resamples (optional for models with covariates)
 
-# Optional user-specified expression for upper constraints on classification probabilities (theta). See "MetadataS2" in DataS2-Input-Files-for-Simulations and "General Simulation Methods" in Appendix S3 of the companion article for details.
+# Optional user-specified expression for upper constraints on classification probabilities (theta). See "MetadataS2.pdf" in DataS2-Input-Files-for-Simulations and "General Simulation Methods" in Appendix S3 for details.
 theta_limit <- parse(text = sim_profiles[1, ]$t_limit)
 
-# Function: {theta.limit.f} Defines upper constraints for estimation of classification probabilities (theta) from user-specified expression
+# Function: {theta.limit.f} Defines upper box constraints for values of classification probabilities (theta) from user-specified expression
 theta.limit.f <- function(theta) {
   min(eval(theta_limit), 0.999)
 }
 
-# Function: {theta4.f} Closure function for producing functions that build matrices of classification probabilities (theta) during statistical analyses. See function 'theta.calc.f' in 'supplemental.functions.R' for details.
+# Function: {theta4.f} Closure function producing functions that build matrices of classification probabilities (theta). See function 'theta.calc.f' in 'supplemental.functions.R' for details.
 theta4.f <- theta.calc.f(4, B, A)
 
-# Import appropriate 'likelihood.equations' R list object containing pre-calculated values for likelihood computations
+# Import appropriate 'likelihood.equations' R list object containing pre-computed values for likelihood computations
 lookup_path <-
   switch(
     paste0(B, A),
@@ -103,22 +108,22 @@ load(lookup_path)
 
 ## Limits for input parameters
 # Code for models currently support:
-# 1 primary observer and 1-4 secondary observers
+# 0-1 primary observer and 1-4 secondary observers
 # 1-2 observation methods
 # 2-4 observation states and true species states
 # For models including one covariate predicting psi or theta, 2-3 observation states and true species states
 # For models including independent covariates predicting psi and theta, 2 observation states and true species states
-# Heterogeneous groups include no more than 2 species
+# Heterogeneous groups include 2 species
 
 ## User-specified control parameters for 'optim' function are specified in the list 'cont' 
 # 'factr' and 'maxit' set the required precision for likelihood optimization and max # of iterations
 # 'lmm' (usually between 5-17) influences memory allocation and possibly optimization speed. See Zhu et al. 1997. Algorithm 778: L-BFGS-B: FORTRAN Subroutines for Large-Scale Bound-Constrained Optimization. ACM Transactions on Mathematical Software 23(4):550–560
 
 ## Constraints for estimated parameters
-# The 'L-BFGS-B' optimization method allows box constraints specifying constraints on values for individual estimated parameters. Lower and upper constraints are summarized in the vectors 'constraints_low' and 'constraints_up'. Vectors (defined below) in code for each model define user-specified values for lower and upper constraints by parameter type. Lower constraints often help optimization and are included by default. Upper constraints should only be included when necessary. Vector 'constraints_up' defaults to values of 'Inf', resulting in no upper constraints. If users specify 'theta limits' in .csv input files (see Metadata S2 in DataS2) upper constraints will be used for model optimization, with upper constraints for classification probabilities (theta) defined by the 'theta limits' and upper constraints for other parameters taken from input vectors below. If estimated parameters fall very near or outside constraints, model optimization will fail and generate error code '99'.
-# Constraints typically can be left unaltered, but may need to be changed to avoid model optimization problems occurring when true values are outside these constraints or when models optimize on (extremely) incorrect values. 
+# The 'L-BFGS-B' optimization method allows box constraints specifying constraints on values for individual estimated parameters. Lower and upper constraints are summarized in the vectors 'constraints_low' and 'constraints_up'. Vectors (below) define user-specified values for lower and upper constraints by parameter type. Lower constraints often help optimization and are included by default. Upper constraints should only be included when necessary. Vector 'constraints_up' defaults to values of 'Inf' (e.g., no constraints). If users specify 'theta limits' in .csv input files (see MetadataS2 in DataS2) upper constraints will be used for model optimization, with upper constraints for classification probabilities (theta) defined by the 'theta limits' and upper constraints for other parameters taken from input vectors below. If estimated parameters fall very near or outside constraints, model optimization will fail and generate error code '99'.
+# Constraints typically can be left unaltered, but may need to be changed to avoid model optimization problems occurring when true values are outside constraints or when models optimize on (extremely) incorrect values (e.g. multi-modality). 
 
-# 'constraints_logit' Constraints for true species probabilities and classification probabilities (psi/theta), transformed to logit scale
+# 'constraints_logit' Constraints for true species probabilities and classification probabilities (psi/theta)
 # 'constraints_g' Constraints for mean group size
 # 'constraints_mix' Constraints for heterogeneous group parameters (pi and rho)
 # 'constraints_b0' and 'constraints_b1' Constraints for multinomial logit regression coefficients (betas, b0 = intercepts, b1 = slopes) predicting true species probabilities and classification probabilities (psi/theta)
@@ -127,7 +132,7 @@ load(lookup_path)
 #           MOM/SOM model simulations 
 ###############################################################################
 
-# These routines conduct "omnibus", "covariate", and "distinct observer" simulations for MOM/SOM models, assuming no un-modeled heterogeneity in the data (i.e. models for data generation and data analyses are identical). 
+# These routines conduct "omnibus", "covariate", and "distinct observer" simulations for MOM/SOM models, assuming no un-modeled heterogeneity in the data (i.e., models for data generation and data analyses are identical). 
 # Conduct analyses by selecting and executing all code in this section. 
 
 if (model == "M") {
@@ -324,7 +329,7 @@ if (model == "M") {
       }
     }
     
-    # If any model(s) never optimize adequately: generate warnings, remove failed model(s) from 'model_results', and update # of (successful) simulation repetitions
+    # If any model(s) never optimize adequately: generate warnings, remove failed model(s) from 'model_results', and update # of (successful) simulation replicates
     if (length(fail) > 0) {
       model_results <- model_results  %>% do(model_results[-fail, 1:6])
       
@@ -401,7 +406,7 @@ if (model == "M") {
   t_start <- t_loop <- unclass(Sys.time()) # For recording simulation duration
   error_msg <- converge_fail <- NULL # For error messages and convergence warnings
   
-  # Define objects which will have output appended after each simulation repetition
+  # Define objects which will have output appended after each simulation replicate
   betas <- NULL
   output_betas <- NULL
   output_bootstrap <- NULL
@@ -633,7 +638,7 @@ if (model == "M") {
         }
       }
       
-      # If any model(s) never optimize adequately: generate warnings, remove failed model(s) from 'model_results', and update # of (successful) simulation repetitions
+      # If any model(s) never optimize adequately: generate warnings, remove failed model(s) from 'model_results', and update # of (successful) simulation replicates
       if (length(fail) > 0) {
         model_results <- model_results  %>% do(model_results[-fail, 1:6])
         converge_fail <- rbind(converge_fail, as_tibble(list(
@@ -670,7 +675,7 @@ if (model == "M") {
     
     ## Output related to estimates of overall mean classification probabilities (theta) derived from regression coefficients of multinomial logistic regression and observed covariate values. Alternative 95% confidence limits for estimated means were constructed assuming 1) asymptotic normal distribution in natural scale (i.e, probabilities) and 2) asymptotic normal distribution of parameters in logit scale.
     # For each distinct model (rows), 'output_betas' contains summarized statistics (mean error, root mean square error, and 95% CI coverage) for overall mean estimates of classification probabilities
-    # For each simulation repetition (rows), 'betas' contains estimated regression coefficients, estimated overall mean probabilities with associated standard errors, 95% confidence intervals ('lg' denotes limits estimated in logit scale), and 95% confidence interval coverage
+    # For each simulation replicate (rows), 'betas' contains estimated regression coefficients, estimated overall mean probabilities with associated standard errors, 95% confidence intervals ('lg' denotes limits estimated in logit scale), and 95% confidence interval coverage
     
       tmp <- theta.derived.f(sim_data, sim_data_tmp, model_results, parameters_output, output_betas)
       output_betas <- tmp[[1]]
@@ -688,10 +693,10 @@ if (model == "M") {
       parameters_index <- 1
       cat("\n Completed model optimization for simulation", sim, "\n")
 
-      # Loop for bootstrap re-samples for each repetition (indexed by 'q') of simulated data
+      # Loop for bootstrap re-samples for each replicate (indexed by 'q') of simulated data
       for (q in 1:reps) {
         
-        # Simulated survey data for current simulation repetition 
+        # Simulated survey data for current simulation replicate 
         data.rep <- filter(sim_data_tmp, id == tmp_id[q])
         
         # Sample groups (with replacement) from simulated data to generate n (= n_bootstrap) re-samples of the simulated survey data
@@ -801,7 +806,7 @@ if (model == "M") {
     # Remove any 'NA' results for bootstrap re-samples
     tmp_theta_bootstrap <- tmp_theta_bootstrap[(which(!is.na(tmp_theta_bootstrap[, 1]))), ]
       
-    ## Estimate standard errors, 95% confidence limits, and 95% confidence interval coverage for classification probabilities (theta) from bootstrapped estimates. Confidence limits are estimated using 1) the bootstrap percentile method and 2) the bootstrap estimated SE and assuming the sampling distribution of logit scale parameters follows a normal distribution.
+    ## Estimate standard errors, 95% confidence limits, and 95% confidence interval coverage for classification probabilities (theta) from bootstrapped estimates. Confidence limits are estimated using the bootstrap estimated SE and assuming the sampling distribution of logit scale parameters follows a normal distribution.
     tmp.theta <- betas[which(betas[, ncol(betas)] == sim), -grep("^b[0123456789]_", colnames(betas))]
     output_bootstrap <- theta.bootstrap.f(sim_data, tmp.theta, tmp_theta_bootstrap, output_bootstrap)
     } # End of bootstrap loop
@@ -828,7 +833,7 @@ if (model == "M") {
     write.csv(output_global, file = out_filename)
   )
   
-  #  Optional export of estimated regression coefficients for each simulation repetition
+  #  Optional export of estimated regression coefficients for each simulation replicate
   # try(
   #   write.csv(betas, file = paste0(in_filename, "_out.betas.csv"))
   # )
@@ -857,7 +862,7 @@ if (model == "M") {
   constraints_mix <- c(qlogis(0.0001), Inf)  # Constraints for heterogeneous group parameters
   constraints_b0 <- c(-10, 10); constraints_b1 <- c(-6, 6) # Constraints for regression coefficients (b0 = intercept, b1 = slope) predicting true species probabilities (psi)
   
-  # Define objects which will have output appended after each simulation repetition
+  # Define objects which will have output appended after each simulation replicate
   betas <- NULL
   output_betas <- NULL
   output_bootstrap <- NULL
@@ -1100,7 +1105,7 @@ if (model == "M") {
         }
       }
       
-      # If any model(s) never optimize adequately: generate warnings, remove failed model(s) from 'model_results', and update # of (successful) simulation repetitions
+      # If any model(s) never optimize adequately: generate warnings, remove failed model(s) from 'model_results', and update # of (successful) simulation replicates
       if (length(fail) > 0) {
         model_results <- model_results  %>% do(model_results[-fail, 1:6])
         converge_fail <- rbind(converge_fail, as_tibble(list(
@@ -1139,7 +1144,7 @@ if (model == "M") {
     
     ## Output related to estimates of overall mean true species probabilities (psi) and mean classification probabilities (theta) derived from regression coefficients of multinomial logistic regression and observed covariate values. Alternative 95% confidence limits for estimated means were constructed assuming 1) asymptotic normal distribution in natural scale (i.e, probabilities) and 2) asymptotic normal distribution of parameters in logit scale.
     # For each distinct model (rows), 'output_betas' contains summarized statistics (mean error, root mean square error, and 95% CI coverage) for overall mean estimates of true species probabilities (psi) and classification probabilities
-    # For each simulation repetition (rows), 'betas' contains estimated regression coefficients, estimated overall mean probabilities with associated standard errors, 95% confidence intervals ('lg' denotes limits estimated in logit scale), and 95% confidence interval coverage
+    # For each simulation replicate (rows), 'betas' contains estimated regression coefficients, estimated overall mean probabilities with associated standard errors, 95% confidence intervals ('lg' denotes limits estimated in logit scale), and 95% confidence interval coverage
     
     tmp <- psi.derived.f(sim_profiles, sim_data, sim_data_tmp, model_results, parameters_output, output_betas)
     output_betas <- tmp[[1]]
@@ -1161,10 +1166,10 @@ if (model == "M") {
       parameters_index <- 1
       cat("\n Completed model optimization for simulation", sim, "\n")
 
-      # Loop for bootstrap re-samples for each repetition (indexed by 'q') of simulated data
+      # Loop for bootstrap re-samples for each replicate (indexed by 'q') of simulated data
       for (q in 1:reps) {
 
-        # Simulated survey data for current simulation repetition 
+        # Simulated survey data for current simulation replicate 
         data.rep <- filter(sim_data_tmp, id == tmp_id[q])
         
         # Sample groups (with replacement) from simulated data to generate n (= n_bootstrap) re-samples of the simulated survey data
@@ -1310,7 +1315,7 @@ if (model == "M") {
       tmp_psi_bootstrap <- tmp_psi_bootstrap[(which(!is.na(tmp_psi_bootstrap[, 1]))), ]
       tmp_theta_bootstrap <- tmp_theta_bootstrap[(which(!is.na(tmp_theta_bootstrap[, 1]))), ]
         
-      ## Estimate standard errors, 95% confidence limits, and 95% confidence interval coverage for true species probabilities (psi) from bootstrapped estimates. Confidence limits are estimated using 1) the bootstrap percentile method and 2) the bootstrap estimated SE and assuming the sampling distribution of logit scale parameters follows a normal distribution.
+      ## Estimate standard errors, 95% confidence limits, and 95% confidence interval coverage for true species probabilities (psi) from bootstrapped estimates. Confidence limits are estimated using the bootstrap estimated SE and assuming the sampling distribution of logit scale parameters follows a normal distribution.
       tmp.psi <- betas[which(betas[, ncol(betas)] == sim)  ,  -grep("^b[0123456789]_", colnames(betas))]
       
       output_bootstrap <- psi.bootstrap.f(sim_data, tmp.psi, tmp_psi_bootstrap, tmp_theta_bootstrap, output_bootstrap)
@@ -1339,7 +1344,7 @@ if (model == "M") {
     write.csv(output_global, file = out_filename)
   )
   
-  #  Optional export of estimated regression coefficients for each simulation repetition
+  #  Optional export of estimated regression coefficients for each simulation replicate
   # try(
   #   write.csv(betas, file = paste0(in_filename, "_out.betas.csv"))
   # )
@@ -1679,7 +1684,7 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
         }
       }
       
-      # If any model(s) never optimize adequately: generate warnings, remove failed model(s) from 'model_results', and update # of (successful) simulation repetitions
+      # If any model(s) never optimize adequately: generate warnings, remove failed model(s) from 'model_results', and update # of (successful) simulation replicates
       if (length(fail) > 0) {
         model_results <- model_results  %>% do(model_results[-fail, 1:6])
         converge_fail <- rbind(converge_fail, as_tibble(list(
