@@ -1,8 +1,8 @@
 # generate_simulation_data.R
-# Function for generating simulated survey data using multi-observer methods, version 1.0.0
+# Function for generating simulated survey data using multi-observer methods, version 1.1.0
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
-# R computer code for generating simulated survey data for multi-observation method (MOM) and single-observation method (SOM) models. Accepts user-specified inputs for simulation analyses, returns list with 4 elements: 1) formatted simulated survey data, tables of key values (if applicable) for 2) observed groups and 3) binned covariate values, and 4) true values for mean overall true species probabilities and classification probabilities (if applicable). Code developed and tested in R version 3.6.
+# R computer code for generating simulated survey data for multi-observation method (MOM) and single-observation method (SOM) models. Accepts user-specified inputs for simulation analyses, returns list with 4 elements: 1) formatted simulated survey data, tables of key values (if applicable) for 2) observed groups and 3) binned covariate values, and 4) true values for mean overall true species probabilities and classification probabilities (if applicable). Code developed and tested in R version 4.1.
 
 # This code should be executed prior to conducting simulation analyses in 'simulations_R_code.R'
 
@@ -196,7 +196,7 @@ r <- list(y1 = n.ps[1] * reps, y2 = n.ps[2] * reps); r[3:5] <- rep(list(r$y2), 3
 
 # Surveys without covariate(s) predicting true species probability (psi)
 if (sim$Model == "M" | sim$Model == "M.theta.p" | sim$Model == "M.theta" | sim$Model == "M.theta.ps" | sim$Model == "mpX") {
-  data.t <- t(rmult.f(1, r[[1]], group.p))
+  data.t <- rmnom(r[[1]], 1, prob = matrix(group.p, nrow = 1))
   
 # Surveys with covariate(s) predicting true species probability (psi)
 }else if (sim$Model == "M.psi" | sim$Model == "M.theta.psi" | sim$Model == "M.theta+psi") {
@@ -324,8 +324,7 @@ if (sim$Model == "M" | sim$Model == "M.theta.p" | sim$Model == "M.theta" | sim$M
       if (B == 2) {
         # True species states = 2
         # Absolute mixing probability for each group.
-        mix.psi <- apply(psi.group, 1, function(x)
-          mix[1] * min(x) ^ 2 * max(x) / min(x))
+        mix.psi <- mix[1] * psi.group[, 1] * psi.group[, 2]
         
         # Calculate matrix with group probabilities (col) for each species and heterogeneous groups for each true group (row).
         psi.group <-  cbind(psi.group - mix.psi, mix.psi) / (1 - mix.psi)
@@ -338,13 +337,12 @@ if (sim$Model == "M" | sim$Model == "M.theta.p" | sim$Model == "M.theta" | sim$M
         pairs <- matrix(c(
           1, 2, 1, 3, 2, 3
           ), ncol = 2, byrow = T)
+        
         # Group probabilities for heterogeneous groups
         mix.mat[, 4:6] <- vapply(1:3, function(x)
-          mix[x] *
-            (pmin(psi.group[, pairs[x, 1]], psi.group[, pairs[x, 2]])) ^ 2 *
-            pmax(psi.group[, pairs[x, 1]], psi.group[, pairs[x, 2]]) /
-            pmin(psi.group[, pairs[x, 1]], psi.group[, pairs[x, 2]])
+          mix[x] * psi.group[, pairs[x, 1]] * psi.group[, pairs[x, 2]]
           , numeric(nrow(mix.mat)))
+        
         # Group probabilities for homogeneous groups
         mix.mat[, 1:3] <- vapply(1:3, function(x)
           psi.group[, x] -
@@ -392,12 +390,7 @@ if (all(mix == 0)) {
   par.mean[[1]] <- psi.mean
   
   # Generate true groups from group probabilities and divide data into 12 bins to allow parallel generation of random draws 
-  cuts <- floor(seq(1, r[[1]] + 1.5, length.out = 13))
-  data.t <-
-    foreach(i = 1:12, .combine = rbind, .inorder = T, .export = "rmult.f"
-    ) %dopar% {
-      t(vapply(cuts[i]:(cuts[i + 1] - 1), function(x) rmult.f(1, 1, psi.group[x, ]), numeric(ncol(psi.group))))
-    }
+  data.t <-rmnom(r[[1]], 1, prob = psi.group[1:r[[1]] , ])
 }
 
 data.t <- data.frame(data.t)
@@ -420,7 +413,7 @@ if (any(g > 1)) {
   data.t <- data.t %>%
     select(everything()) %>%
     as_tibble(. , .name_repair = "check_unique") * vapply(1:B, function(b)
-      rztpois(r[[1]], lambda[b]), integer(r[[1]]))
+      as.integer(rtpois(r[[1]], lambda[b], a = 0)), integer(r[[1]]))
 }
 
 ###############################################################################
@@ -462,9 +455,7 @@ if (sim$Model == "M" | sim$Model == "M.theta.p" | sim$Model == "mpX" | sim$Model
         # For observer 'obs', generate 'r' observed groups and place in columns 'y'. Observations are randomly generated for each individual in a true group by draws from a multinomial distribution with true classification probabilities 'theta.t'
         data.obs[1:r[[obs]], y[[obs]]] <-
           data.obs %>% select(y[[obs]]) %>% slice(1:r[[obs]]) + 
-          matrix(
-            vapply(unlist(data.t[1:r[[obs]], b]), rmult.f, integer(A), n = 1, prob = theta.t[b, , obs])
-            , byrow = T, ncol = A)
+          rmnom(length(data.t[1:r[[obs]], b]), data.t[1:r[[obs]], b], prob = matrix(theta.t[b, , obs], nrow = 1))
       }
     }
 }
@@ -539,10 +530,7 @@ if (sim$Model == "M.theta.p" | sim$Model == "M.theta" | sim$Model == "M.theta.ps
         # For observer 'obs', generate 'r' observed groups and place in columns 'y'. Classifications are generated for each individual using random draws from a multinomial distribution with true classification probabilities 'prob.cov' for each true group.
         data.obs[1:r[[1]], y[[1]]] <-
           data.obs %>% select(y[[1]]) %>% slice(1:r[[1]]) +
-          matrix(vapply(1:r[[1]], function(x)
-            rmult.f(data.t[x, b], n = 1, prob = prob.cov[x,]), integer(A)),
-            byrow = T,
-            ncol = A)
+          rmnom(r[[1]], data.t[, b], prob = prob.cov[1:r[[1]], ])
       }
       
       theta.mean <-
@@ -576,12 +564,9 @@ if (sim$Model == "M.theta.p" | sim$Model == "M.theta" | sim$Model == "M.theta.ps
         for (obs in (O_ps[1] + 1):sum(O_ps)) {
           
           # For observer 'obs', generate 'r' observed groups and place in columns 'y'. Classifications are generated for each individual using random draws from a multinomial distribution with true classification probabilities 'prob.cov' for each true group.
-
           data.obs[1:r[[2]], y[[obs]]] <-
             data.obs %>% select(y[[obs]]) %>% slice(1:r[[2]]) +
-            matrix(
-              vapply(1:r[[2]], function(x) rmult.f(data.t[x, b], n = 1, prob = prob.cov[x, ]), integer(A))
-              , byrow = T, ncol = A) 
+            rmnom(r[[2]], data.t[1:r[[2]], b], prob = prob.cov[1:r[[2]], ])
         }
       }
       theta.mean <-
@@ -616,9 +601,7 @@ if (sim$Model == "M.theta.p" | sim$Model == "M.theta" | sim$Model == "M.theta.ps
 
       data.obs[1:r[[1]], y[[1]]] <-
         data.obs %>% select(y[[1]]) %>% slice(1:r[[1]]) +
-        matrix(
-          vapply(1:r[[1]], function(x) rmult.f(data.t[x, b], n = 1, prob = prob.cov[x, ]), integer(A))
-          , byrow = T, ncol = A)
+        rmnom(r[[1]], data.t[, b], prob = prob.cov[1:r[[1]], ])
     }
 
     theta.mean <-
@@ -657,9 +640,7 @@ if (sim$Model == "M.theta.p" | sim$Model == "M.theta" | sim$Model == "M.theta.ps
         
         data.obs[1:r[[2]], y[[obs]]] <-
           data.obs %>% select(y[[obs]]) %>% slice(1:r[[2]]) +
-          matrix(
-            vapply(1:r[[2]], function(x) rmult.f(data.t[x, b], n = 1, prob = prob.cov[x, ]), integer(A))
-            , byrow = T, ncol = A)
+          rmnom(r[[2]], data.t[1:r[[2]], b], prob = prob.cov[1:r[[2]], ])
         }
       }
       theta.mean <-
@@ -697,9 +678,7 @@ if (sim$Model == "M.theta.p" | sim$Model == "M.theta" | sim$Model == "M.theta.ps
       
       data.obs[1:r[[1]], y[[1]]] <-
         data.obs %>% select(y[[1]]) %>% slice(1:r[[1]]) +
-        matrix(
-          vapply(1:r[[1]], function(x) rmult.f(data.t[x, b], n = 1, prob = prob.cov[x, ]), integer(A))
-          , byrow = T, ncol = A) 
+        rmnom(r[[1]], data.t[, b], prob = prob.cov[1:r[[1]], ])
     }
 
     theta.mean <-
@@ -740,9 +719,7 @@ if (sim$Model == "M.theta.p" | sim$Model == "M.theta" | sim$Model == "M.theta.ps
           
           data.obs[1:r[[2]], y[[obs]]] <-
             data.obs %>% select(y[[obs]]) %>% slice(1:r[[2]]) +
-            matrix(
-              vapply(1:r[[2]], function(x) rmult.f(data.t[x, b], n = 1, prob = prob.cov[x, ]), integer(A))
-              , byrow = T, ncol = A) 
+            rmnom(r[[2]], data.t[1:r[[2]], b], prob = prob.cov[1:r[[2]], ])
         }
       }
       theta.mean <-

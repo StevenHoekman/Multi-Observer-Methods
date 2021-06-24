@@ -1,9 +1,9 @@
 # murrelet_r_code.R
-# Version 1.0.0
+# Version 1.1.0
 # R code for estimating uncertain identification for 2 species of murrelets 
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
-# This code conducts statistical analyses using multi-observation method models to estimate uncertain identification for 2 species of murrelets during line transect surveys in Glacier Bay, Alaska, USA during July 2014. Details of conducting analyses and of parameter naming conventions are provided in Metadata S4: Input Files and R Computer Code for Analyses of Glacier Bay Murrelet Survey Data. Descriptions of the statistical model and its parameters are provided in the companion article in Appendix S5: Methods and Results for Application of MOM Models to Line Transect Surveys for Murrelets. Code was developed and tested using R version 3.6.
+# This code conducts statistical analyses using multi-observation method models to estimate uncertain identification for 2 species of murrelets during line transect surveys in Glacier Bay, Alaska, USA during July 2014. Details of conducting analyses and of parameter naming conventions are provided in Metadata S4: Input Files and R Computer Code for Analyses of Glacier Bay Murrelet Survey Data. Descriptions of the statistical model and its parameters are provided in the companion article in Appendix S5: Methods and Results for Application of MOM Models to Line Transect Surveys for Murrelets. Code was developed and tested using R version 4.1.
 
 ###############################################################################
 #             Load R packages
@@ -283,7 +283,7 @@ murrelet.model.f <- function(parameters, dat){
     for (obs in 1:n_observers) {
       # Matrix 'dat.tmp contains observed groups for the current observer 'obs' and group size
       dat_tmp <- filter(dat, group_size == i) %>%
-        select(X = (((obs - 1) * A) + 1):(obs * A))
+        select(any_of((((obs - 1) * A) + 1):(obs * A)))
       size_tmp <- rowSums(dat_tmp)
       likelihood_i[, obs] <- 
         as.vector(vapply(1:n_histories, function(x) 

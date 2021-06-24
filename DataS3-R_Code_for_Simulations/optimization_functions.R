@@ -1,8 +1,8 @@
 # optimization_functions.R
-# Functions for likelihood optimization of models estimating uncertain identification using multi-observer methods, version 1.0.0
+# Functions for likelihood optimization of models estimating uncertain identification using multi-observer methods, version 1.1.0
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
-# R computer code for optimizing multi-observation method (MOM) and single-observation method (SOM) models for estimating uncertain species identification by minimizing the -log(likelihood). These functions are designed to conduct simulation analyses described in the companion article and Appendices S1 to S3. Each function optimizes models with differing predictive covariates, as described in comments of each function and in MetadataS3.pdf. Code developed and tested in R version 3.6.
+# R computer code for optimizing multi-observation method (MOM) and single-observation method (SOM) models for estimating uncertain species identification by minimizing the -log(likelihood). These functions are designed to conduct simulation analyses described in the companion article and Appendices S1 to S3. Each function optimizes models with differing predictive covariates, as described in comments of each function and in MetadataS3.pdf. Code developed and tested in R version 4.1.
 
 # This code should be executed prior to conducting simulation analyses in 'simulations_R_code.R'
 
@@ -104,7 +104,7 @@ optimize.M.f <- function(param, dat, keys, sim_profile){
   
   # True species probabilities for species 1 to B
   psi <- c(psi, 1 - sum(psi))
-  cat(psi, "\n")
+
   # With group sizes >=1, extract group size parameters for species 1 to B to vector 'g_spp'
   g_spp <- rep(1, B) 
   if (any(g > 1)) {
@@ -157,10 +157,12 @@ optimize.M.f <- function(param, dat, keys, sim_profile){
     group1_obs_cprobability <- array(0, dim = c(g1, B, n_observers))
     for (obs in 1:n_observers) {
       group1_obs_cprobability[, , obs] <-
-        t(apply(dat[(1:g1), (((obs - 1) * A) + 1):(obs * A)], 1, function(x)
-          apply(theta_arr[, , obs], 1, function(y)
-            dmultinom(x, prob = y))))
+        apply(theta_arr[, , obs], 1, function(x)
+          dmnom(dat[(1:g1), (((obs - 1) * A) + 1):(obs * A)], size = 1, prob = matrix(x, nrow = 1)))
     }
+    
+    group1_obs_cprobability[group1_obs_cprobability == 0] <- 1
+    group1_obs_cprobability[is.na(group1_obs_cprobability)] <- 1
     
     # For each true species state 1 to B (columns), matrix 'probability_mat' contains probabilities of each unique observation history (row) computed as the product of probabilities of classifications for all observers and probabilities of true species states
     
@@ -242,7 +244,7 @@ optimize.M.f <- function(param, dat, keys, sim_profile){
           
           for (obs in 1:n_observers) {
             dat_tmp <- dat[rows_i, ] %>%
-              select(X = (((obs - 1) * A) + 1):(obs * A))
+              select(all_of((((obs - 1) * A) + 1):(obs * A)))
             record_sum <- rowSums(dat_tmp)
             probability_mat[, obs] <- 
               as.vector(vapply(1:n_i, function(x) 
@@ -370,7 +372,7 @@ optimize.M.f <- function(param, dat, keys, sim_profile){
         
         for (obs in 1:n_observers) {
           dat_tmp <- dat[rows_i, ] %>%
-            select(X = (((obs - 1) * A) + 1):(obs * A))
+            select(all_of((((obs - 1) * A) + 1):(obs * A)))
           record_sum <- rowSums(dat_tmp)
           probability_mat[, obs] <- 
             as.vector(vapply(1:n_i, function(x) 
@@ -631,7 +633,7 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
         
         for (obs in 1:n_observers) {
           dat_tmp <- dat[rows_i, ] %>%
-            select(X = (((obs - 1) * A) + 1):(obs * A))
+            select(all_of((((obs - 1) * A) + 1):(obs * A)))
           record_sum <- rowSums(dat_tmp)
           probability_mat[, obs] <- 
             as.vector(vapply(1:n_i, function(x) 
@@ -739,7 +741,7 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
       
       for (obs in 1:n_observers) {
         dat_tmp <- dat[rows_i, ] %>%
-          select(X = (((obs - 1) * A) + 1):(obs * A))
+          select(all_of((((obs - 1) * A) + 1):(obs * A)))
         record_sum <- rowSums(dat_tmp)
         probability_mat[, obs] <- 
           as.vector(vapply(1:n_i, function(x) 
@@ -950,7 +952,7 @@ optimize.M.theta.p.f <- function(param, dat, sim_profile){
       
       for (obs in 1:n_observers) {
         dat_tmp <- filter(dat, group_size == i) %>%
-          select(X = (((obs - 1) * A) + 1):(obs * A))
+          select(all_of((((obs - 1) * A) + 1):(obs * A)))
         record_sum <- rowSums(dat_tmp)
         probability_mat[, obs] <- 
           as.vector(vapply(1:n_i, function(x) 
@@ -998,7 +1000,7 @@ optimize.M.theta.p.f <- function(param, dat, sim_profile){
       
       for (obs in 1:n_observers) {
         dat_tmp <- filter(dat, group_size == i) %>%
-          select(X = (((obs - 1) * A) + 1):(obs * A))
+          select(all_of((((obs - 1) * A) + 1):(obs * A)))
         record_sum <- rowSums(dat_tmp)
         probability_mat[, obs] <- 
           as.vector(vapply(1:n_i, function(x) 
@@ -1237,7 +1239,7 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
         
         for (obs in 1:n_observers) {
           dat_tmp <- filter(dat, group_size == i) %>%
-            select(X = (((obs - 1) * A) + 1):(obs * A))
+            select(all_of((((obs - 1) * A) + 1):(obs * A)))
           record_sum <- rowSums(dat_tmp)
           probability_mat[, obs] <-
             as.vector(vapply(1:n_i, function(x)
@@ -1349,7 +1351,7 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
         
         for (obs in 1:n_observers) {
           dat_tmp <- filter(dat, group_size == i) %>%
-            select(X = (((obs - 1) * A) + 1):(obs * A))
+            select(all_of((((obs - 1) * A) + 1):(obs * A)))
           record_sum <- rowSums(dat_tmp)
           probability_mat[, obs] <-
             as.vector(vapply(1:n_i, function(x)
@@ -1523,7 +1525,7 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
       
       for (obs in 1:n_observers) {
         dat_tmp <- filter(dat, group_size == i) %>%
-          select(X = (((obs - 1) * A) + 1):(obs * A))
+          select(all_of((((obs - 1) * A) + 1):(obs * A)))
         record_sum <- rowSums(dat_tmp)
         probability_mat[, obs] <- 
           as.vector(vapply(1:n_i, function(x) 
@@ -1572,7 +1574,7 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
       
       for (obs in 1:n_observers) {
         dat_tmp <- filter(dat, group_size == i) %>%
-          select(X = (((obs - 1) * A) + 1):(obs * A))
+          select(all_of((((obs - 1) * A) + 1):(obs * A)))
         record_sum <- rowSums(dat_tmp)
         probability_mat[, obs] <- 
           as.vector(vapply(1:n_i, function(x) 

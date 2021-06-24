@@ -1,8 +1,8 @@
 # Supplemental_functions.R
-# Supplemental functions for analyses and summaries, version 1.0.0
+# Supplemental functions for analyses and summaries, version 1.1.0
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
-# R computer code with supplemental functions for simulation analyses for estimating uncertain identification using multi-observer methods. These functions provide supplemental services such as: drawing random samples from probability distributions; computing probabilities and other values used in likelihood computations; and generating, formatting, summarizing, and error-checking simulation data and statistical output. Functions are grouped according by purpose. Comments with each function describe its purpose, inputs and outputs, and functioning of the code. Code developed and tested in R version 3.6.
+# R computer code with supplemental functions for simulation analyses for estimating uncertain identification using multi-observer methods. These functions provide supplemental services such as: drawing random samples from probability distributions; computing probabilities and other values used in likelihood computations; and generating, formatting, summarizing, and error-checking simulation data and statistical output. Functions are grouped according by purpose. Comments with each function describe its purpose, inputs and outputs, and functioning of the code. Code developed and tested in R version 4.1.
 
 # This code should be executed prior to conducting simulation analyses in 'simulations_R_code.R'
 
@@ -495,8 +495,7 @@ group.probability.psi.encounter.f <- function(p, m, g) {
       # True species states = 2
       
       # For all groups (prior to mixing), compute matrix of probabilities 'zeta' of species forming heterogeneous groups given true species probabilities for unique observation histories (row)
-      zeta <- apply(delta, 1, function(x)
-        m[1] * min(x) ^ 2 * max(x) / min(x))
+      zeta <- m[1] * delta[, 1] * delta[, 2]
       
       # Compute group probabilities for each species (pi.1, pi.2) and heterogeneous groups (pi.12) for unique observation histories (row)
       pi <-  cbind(delta - zeta, zeta) / (1 - zeta)
@@ -521,12 +520,11 @@ group.probability.psi.encounter.f <- function(p, m, g) {
       pairs <- matrix(c(
         1, 2, 1, 3, 2, 3
       ), ncol = 2, byrow = T)
+      
       zeta[, 4:6] <- vapply(1:3, function(x)
-        m[x] *
-          (pmin(delta[, pairs[x, 1]], delta[, pairs[x, 2]])) ^ 2 *
-          pmax(delta[, pairs[x, 1]], delta[, pairs[x, 2]]) /
-          pmin(delta[, pairs[x, 1]], delta[, pairs[x, 2]])
+        m[x] * delta[, pairs[x, 1]] * delta[, pairs[x, 2]]
         , numeric(nrow(zeta)))
+      
       zeta[, 1:3] <- vapply(1:3, function(x)
         delta[, x] -
           rowSums(zeta[, B + pairs[x, ]])
@@ -706,10 +704,8 @@ format.MOM.data.f <- function(data.obs, A, O_ps, mix, n_bins) {
     var.sort.2 <- quo(desc(count))
   
     dat <- group_by_all(data.obs) %>%
-      summarise(., count = n()) %>%
-      ungroup(.) %>%
+      summarise(., count = n(), .groups = "drop") %>%
       arrange(.,!!! var.sort, !! var.sort.2)
-  
   
     # Return formatted observation histories without keyed table(s) if: (A) group size = 1 and no covariate predicting true species probabilities is present, if (B) continuous predictive covariates are present, or if (C) predictive covariates for true species probabilities and classification probabilities are present.
 
@@ -796,9 +792,10 @@ generate.keys.f <- function(dat, obs, A) {
   # Data frame 'out' contains unique key values for unique observed groups within each simulation replicate (indexed by 'id') with columns labeled for each observer
   
   out <-
-    bind_cols(llply(1:obs, function(x)
-      left_join(d[, c(col[x, ])], unique.key, by = c(paste0("V", 1:A))) %>% 
+    do.call(cbind, lapply(1:obs, function(x)
+      left_join(d[, c(col[x,])], unique.key, by = c(paste0("V", 1:A))) %>%
         select(., key)))
+  
   key.n <-
     laply(strsplit(col.n[col[, 1]], "[.]"), function(x)
       paste0(substr(x[1], 1, nchar(x[1]) - 2), "_key"))
@@ -837,9 +834,10 @@ generate.keys.theta.f <- function(dat, obs, A) {
   # Data frame 'out' contains unique key values for unique combinations of observed groups and covariate values, with columns labeled for each observer
   
   out <-
-    bind_cols(llply(1:obs, function(x)
+    do.call(cbind, lapply(1:obs, function(x)
       left_join(d[, c(col[x, ], col.cov)], unique.key, by = c(paste0("V", 1:A), "covariate_theta")) %>% 
         select(., key)))
+  
   key.n <-
     laply(strsplit(col.n[col[, 1]], "[.]"), function(x)
       paste0(substr(x[1], 1, nchar(x[1]) - 2), "_key"))
@@ -864,7 +862,7 @@ model.results.f <- function(results, par.t, r, n) {
       logit.col <- c((sum(n[1:2]) + 1):sum(n[1:3]))
     }
     if (n[5] > 0) logit.col <- c(logit.col, (sum(n[1:4]) + 1):sum(n))
-    par.t[logit.col] <- qlogis(unlist(par.t[logit.col]))
+    par.t[logit.col] <- as.list(qlogis(unlist(par.t[logit.col])))
   }
   
   # Calculate variance and standard errors of estimated parameters from Hessian matrix, using Delta Method to apply inverse logit function to standard error of multinomial logit parameters
@@ -919,7 +917,7 @@ model.results.het.s.f <- function(results, par.t, r, n, n.est, par.d) {
       logit.col <- c(logit.col, (sum(n[1:4]) + 1):sum(n))
       logit.col.est <- c(logit.col.est, (sum(n.est[1:4]) + 1):sum(n.est))
       }
-    par.t[logit.col] <- qlogis(unlist(par.t[logit.col]))
+    par.t[logit.col] <- as.list(qlogis(unlist(par.t[logit.col])))
   }
   
   # Calculate variance and standard errors of estimated parameters from Hessian matrix, using Delta Method to apply inverse logit function to standard error of multinomial logit parameters
@@ -3954,11 +3952,6 @@ print.error.f <- function(err.msg, converge.fail){
 ###############################################################################
 #             Functions for generating simulation data
 ###############################################################################
-
-# Function: {rmult.f} Generates random multinomial trials. Accepts inputs of group size 'S', number of trials 'n', and vector of multinomial probabilities 'prob', returns matrix of 'n' random trials (columns) with classification states (rows) for each probability in 'pro' summing to 'S'. 
-
-rmult.f <- function(S, n, prob) {
-  rmultinom(n, S, prob)}
 
 # Function: {names.obs.f} Generates column labels for simulated survey observations. Accepts inputs of # of true species states 'B', observation states 'A', and # of primary/secondary survey observers 'O_ps'. Returns vector of names with format y_[observer]_[A], where [observer takes values "p" for primary observer(s) and values "s1", "s2", "s3" and "s4" for secondary observers and [A] takes values 1 to A for observation states.
 

@@ -1,9 +1,9 @@
 # example_r_code.R
-# Version 1.0.0
+# Version 1.1.0
 # R code for examples demonstrating estimation of uncertain identification using multi-observer methods
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
-# These 5 examples provide diverse examples of multi-observer methods. Each include simulated survey data, input files specifying initial values and constraints for parameters, a function for conducting statistical analyses, and example statistical output. Models, parameter naming conventions, and methods for executing analyses are described in 'Metadata S1 : Example R code for estimating uncertain species identification using multi-observer methods.' Statistical methods are described in the companion article. Code developed and tested in R version 3.6.
+# These 5 examples provide diverse examples of multi-observer methods. Each include simulated survey data, input files specifying initial values and constraints for parameters, a function for conducting statistical analyses, and example statistical output. Models, parameter naming conventions, and methods for executing analyses are described in 'Metadata S1 : Example R code for estimating uncertain species identification using multi-observer methods.' Statistical methods are described in the companion article. Code developed and tested in R version 4.1.
 
 ###############################################################################
 #               Load R packages
@@ -359,7 +359,7 @@ example.2.f <- function(parameters, dat) {
   for (obs in 1:4) {
     # Matrix 'dat_obs' contains subset of observed groups for the current observer 'obs' and group size = 1
     dat_obs <- dat[1:g1, ] %>% 
-      select(., (((obs - 1) * 2) + 1):(obs * 2))
+      select(all_of((((obs - 1) * 2) + 1):(obs * 2)))
     
     group_observation_probability[, , obs] <- 
       t(apply(dat_obs, 1, function(x)
@@ -408,7 +408,7 @@ example.2.f <- function(parameters, dat) {
     for (obs in 1:4) {
       # Matrix 'dat_tmp' contains subset of observed groups for the current observer 'obs' and group size 'i'
       dat_tmp <- dat[rows_i, ] %>%
-        select(X = (((obs - 1) * 2) + 1):(obs * 2))
+        select(all_of((((obs - 1) * 2) + 1):(obs * 2)))
       
       observation_sum <- rowSums(dat_tmp)
       probability_mat[, obs] <- 
@@ -509,7 +509,7 @@ example.3.f <- function(parameters, dat) {
   # Add conditional probabilities of observation states for each observer
   for (obs in 1:5) {
     # Matrix 'dat_obs' contains subset of observations for the current observer 'obs'
-    dat_obs <- select(dat, (((obs - 1) * 3) + 1):(obs * 3))
+    dat_obs <- select(dat, all_of((((obs - 1) * 3) + 1):(obs * 3)))
     
     probability_mat[, obs] <-
       as.vector(apply(dat_obs, 1, function(x)
@@ -675,7 +675,7 @@ example.4.f <- function(parameters, dat) {
     for (obs in 1:5) {
       # Matrix 'data.tmp' contains subset of observed groups for the current observer 'obs' and group size 'i'
       dat_tmp <- dat[rows_i, ] %>%
-        select((((obs - 1) * 2) + 1):(obs * 2))
+        select(all_of((((obs - 1) * 2) + 1):(obs * 2)))
       
       observation_sum <- rowSums(dat_tmp)
       probability_mat[, obs] <- 
@@ -773,7 +773,7 @@ example.5.f <- function(parameters, dat) {
   # Add conditional probabilities for each observer
   for (obs in 1:4) {
     # Matrix 'dat_obs' contains subset of observed groups for the current observer 'obs'
-    dat_obs <- select(dat, (((obs - 1) * 2) + 1):(obs * 2))
+    dat_obs <- select(dat, all_of((((obs - 1) * 2) + 1):(obs * 2)))
     
     group_observation_probability[, , obs] <-
       t(apply(dat_obs, 1, function(x)

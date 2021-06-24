@@ -1,8 +1,8 @@
 # simulations_R_code.R
-# Simulation engine for estimating uncertain identification using multi-observer methods, version 1.0.0
+# Simulation engine for estimating uncertain identification using multi-observer methods, version 1.1.0
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
-# R computer code used to conduct "omnibus", "covariate", and "distinct observer" simulation analyses using multi-observer methods. Simulations rely on input in .csv file format (described in DataS2), which can be altered to conduct user-specified simulations. For multiple-observation method (MOM) and single-observation (SOM) method models and 2 to 4 species, code generates and analyzes simulated survey data, with summary output written to .csv format files. Descriptions of statistical methods are provided in the companion article and Appendices S1 to S3. Descriptions of R objects containing simulated survey data ('sim_data'), statistical output ('model_results'), and summarized simulation output ('output_global') are provided in DataS3. Code developed and tested in R version 3.6.
+# R computer code used to conduct "omnibus", "covariate", and "distinct observer" simulation analyses using multi-observer methods. Simulations rely on input in .csv file format (described in DataS2), which can be altered to conduct user-specified simulations. For multiple-observation method (MOM) and single-observation (SOM) method models and 2 to 4 species, code generates and analyzes simulated survey data, with summary output written to .csv format files. Descriptions of statistical methods are provided in the companion article and Appendices S1 to S3. Descriptions of R objects containing simulated survey data ('sim_data'), statistical output ('model_results'), and summarized simulation output ('output_global') are provided in DataS3. Code developed and tested in R version 4.1.
  
 ###############################################################################
 #           Required functions
@@ -18,12 +18,12 @@
 ###############################################################################
 
 # Install and load prior to executing code below
-library(plyr)   # Programming tools, data manipulation
-library(dplyr)  # Data frame manipulation
-library(doSNOW) # Back end for parallel code execution
-library(mrds)   # Delta method for arbitrary functions
-library(actuar) # Truncated Poisson distributions
-library(nnet)   # Log-linear multinomial models (only required for observed proportions models) 
+library(plyr)       # Programming tools, data manipulation
+library(dplyr)      # Data frame manipulation
+library(doSNOW)     # Back end for parallel code execution
+library(mrds)       # Delta method for arbitrary functions
+library(extraDistr) # Probability distributions
+library(nnet)       # Log-linear multinomial models (only required for observed proportions models) 
 
 ###############################################################################
 #     Register the 'doSNOW' parallel execution back end
@@ -259,7 +259,7 @@ if (model == "M") {
     as.data.frame(foreach(
       i = 1:id_max, 
       .combine = rbind, 
-      .packages = c("plyr", "dplyr"), 
+      .packages = c("plyr", "dplyr", "extraDistr"), 
       .errorhandling = "pass", 
       .options.snow = opts
     ) %dopar% {
@@ -300,7 +300,7 @@ if (model == "M") {
         as.data.frame(foreach(
           i = 1:length(fail_tmp), 
           .combine = rbind, 
-          .packages = c("plyr", "dplyr"), 
+          .packages = c("plyr", "dplyr", "extraDistr"), 
           .errorhandling = "pass"
         ) %dopar% {
           optim(
@@ -671,7 +671,7 @@ if (model == "M") {
     
     # Optional output summarizing estimated versus true group-level predictions for classification probabilities. Un-comment the following 2 lines to add results to data frame 'output'. 
     # tmp <- mlogit.group.predict.f(sim_data[[1]], sim_profiles[sim, ], output)
-    # theta_diff <- rbind(theta_diff, tmp)
+    # theta_diff <- bind_rows(theta_diff, as_tibble(t(as.matrix(tmp))))
     
     ## Output related to estimates of overall mean classification probabilities (theta) derived from regression coefficients of multinomial logistic regression and observed covariate values. Alternative 95% confidence limits for estimated means were constructed assuming 1) asymptotic normal distribution in natural scale (i.e, probabilities) and 2) asymptotic normal distribution of parameters in logit scale.
     # For each distinct model (rows), 'output_betas' contains summarized statistics (mean error, root mean square error, and 95% CI coverage) for overall mean estimates of classification probabilities
@@ -686,8 +686,7 @@ if (model == "M") {
       
     # Bootstrap only if more than 1 bootstrap re-samples (n_bootstrap > 1) are specified in simulation inputs  
     if (n_bootstrap > 1) {
-      remove_col <- grep("id|count|key", colnames(sim_data[[1]])) * -1
-      remove_col <- enquos(remove_col)
+      remove_col <- grep("id|count|key", colnames(sim_data[[1]]))
       tmp_theta_bootstrap <- NULL
       tmp_id <- unique(sim_data_tmp$id)
       parameters_index <- 1
@@ -703,7 +702,7 @@ if (model == "M") {
         tmp <-
           ldply(1:n_bootstrap, function(x)
             sample_n(data.rep, size = sum(data.rep$count), replace = T, weight = count)) %>%
-          select(., !!!remove_col) %>%
+          select(., !any_of(remove_col)) %>%
           bind_cols(., id = rep(1:n_bootstrap, each = sum(data.rep$count)))
 
         # List 'data.bootstrap' contains re-sampled data for the current simulation replicate, with formatting is identical to 'sim_data'
@@ -828,7 +827,7 @@ if (model == "M") {
   # ----- Output & Reports ---
   
   # Combine simulation inputs and outputs, and write 'output_global' as .csv format file to user-specified path
-  output_global <- bind_cols(sim_profiles, output_global, output_betas, output_bootstrap, as_tibble(theta_diff))
+  output_global <- bind_cols(sim_profiles, output_global, output_betas, output_bootstrap, theta_diff)
   try(
     write.csv(output_global, file = out_filename)
   )
@@ -1139,7 +1138,7 @@ if (model == "M") {
     # Optional output summarizing estimated versus true group-level predictions for true species probabilities. Un-comment the following 'if' clause to append results to data frame 'output'.
     # if (model == "M.psi") {
     #   tmp <- mlogit.group.predict.f(sim_data[[1]], sim_profiles[sim, ], output)
-    #   psi_diff <- rbind(psi_diff, tmp)
+    #   psi_diff <- bind_rows(psi_diff, as_tibble(t(as.matrix(tmp))))
     # }
     
     ## Output related to estimates of overall mean true species probabilities (psi) and mean classification probabilities (theta) derived from regression coefficients of multinomial logistic regression and observed covariate values. Alternative 95% confidence limits for estimated means were constructed assuming 1) asymptotic normal distribution in natural scale (i.e, probabilities) and 2) asymptotic normal distribution of parameters in logit scale.
@@ -1158,8 +1157,7 @@ if (model == "M") {
       if (sim_profiles$Model[1] == "M.theta.psi" & A > 2 | sim_profiles$Model[1] == "M.theta+psi" & A > 2) {
         cat("For models 'M.theta.psi' and 'M.theta+psi', bootstrap estimates only supported for A = 2 \n")
       }else{
-      remove_col <- grep("id|count|key", colnames(sim_data[[1]])) * -1
-      remove_col <- enquos(remove_col)
+      remove_col <- grep("id|count|key", colnames(sim_data[[1]]))
       tmp_psi_bootstrap <- NULL
       tmp_theta_bootstrap <- NULL
       tmp_id <- unique(sim_data_tmp$id)
@@ -1181,7 +1179,7 @@ if (model == "M") {
               replace = T,
               weight = count
             )) %>%
-          select(.,!!!remove_col) %>%
+          select(., !any_of(remove_col)) %>%
           bind_cols(., id = rep(1:n_bootstrap, each = sum(data.rep$count)))
         
         # List 'data.bootstrap' contains re-sampled data for the current simulation replicate, with formatting is identical to 'sim_data'
@@ -1339,7 +1337,7 @@ if (model == "M") {
   # ----- Output & Reports ---
   
   # Combine simulation inputs and outputs, and write 'output_global' as .csv format file to user-specified path
-  output_global <- bind_cols(sim_profiles, output_global, output_betas, output_bootstrap, as_tibble(psi_diff))
+  output_global <- bind_cols(sim_profiles, output_global, output_betas, output_bootstrap, psi_diff)
   try(
     write.csv(output_global, file = out_filename)
   )
@@ -1616,7 +1614,7 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
       as.data.frame(foreach(
         i = 1:id_max, 
         .combine = rbind, 
-        .packages = c("plyr", "dplyr"), 
+        .packages = c("plyr", "dplyr", "extraDistr"), 
         .errorhandling = "pass", 
         .options.snow = opts
       ) %dopar% {
@@ -1656,7 +1654,7 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
           as.data.frame(foreach(
             i = 1:length(fail_tmp), 
             .combine = rbind, 
-            .packages = c("plyr", "dplyr"), 
+            .packages = c("plyr", "dplyr", "extraDistr"), 
             .errorhandling = "pass"
           ) %dopar% {
               optim(
@@ -2060,7 +2058,7 @@ for (sim in 1:nrow(sim_profiles)) {
     bind_cols(., data.frame(id = sim_data[[1]]$id, count = sim_data[[1]]$count)) %>%
     group_by(., id) %>% 
     summarise_all(., sum) %>%
-    select(., 2:(A + 1))
+    select(., all_of(2:(A + 1)))
   
   # Calculate mean group sizes if any groups sizes can exceed one
   size.groups <- size.groups.SE <- NULL
@@ -2074,7 +2072,7 @@ for (sim in 1:nrow(sim_profiles)) {
         bind_cols(., data.frame("id" = sim_data[[1]]$id)) %>%
         group_by(., id) %>%
         summarise_all(., sum) %>%
-        select(., 2:(A + 1))
+        select(., all_of(2:(A + 1)))
       
       size.groups <- count.mat/spp.groups
       
@@ -2083,7 +2081,7 @@ for (sim in 1:nrow(sim_profiles)) {
         bind_cols(., data.frame(id = sim_data[[1]]$id)) %>%
         group_by(., id) %>%
         summarise_all(., sum) %>%
-        select(., 2:(A + 1))
+        select(., all_of(2:(A + 1)))
       
       size.groups.SE <- ((squared.sum - count.mat ^ 2 / spp.groups) / (spp.groups - 1)) ^ 0.5 / spp.groups ^ 0.5
     }
@@ -2096,7 +2094,7 @@ for (sim in 1:nrow(sim_profiles)) {
       count.mat[, i] <- 
         count.mat[, i] + count.mat[, A] * (count.mat[, i] / rowSums(count.mat[, 1:B]))
     }
-    count.mat <- select(count.mat, 1:B)
+    count.mat <- select(count.mat, all_of(1:B))
   }
   
   count.mat <- as.matrix(count.mat)
