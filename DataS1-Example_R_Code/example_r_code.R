@@ -1,5 +1,5 @@
 # example_r_code.R
-# Version 1.1.0
+# Version 1.1.1
 # R code for examples demonstrating estimation of uncertain identification using multi-observer methods
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
@@ -10,7 +10,6 @@
 ###############################################################################
 
 # Required packages
-library(plyr)   # Programming tools, data manipulation
 library(dplyr)  # Data frame manipulation
 
 # Optional package for estimating variances and standard errors of back-transformed parameter estimates
@@ -88,10 +87,12 @@ group.true.probability.key.f <- function(group_probability, size_probability, si
   homogeneous <-
     vapply(1:2, function(x)
       group_probability[x] * size_probability[size, x], numeric(length(size)))
-  output <- llply(size, function(x)
-    c(homogeneous[which(size == x) , 1],
-      group_probability[3] * size_probability[0:(x - 1), 2] * size_probability[(x - 1):0, 1],
-      homogeneous[which(size == x) , 2]))
+
+  output <- lapply(size, function(x) c(
+    homogeneous[which(size == x) , 1],
+    group_probability[3] * size_probability[0:(x - 1), 2] * size_probability[(x - 1):0, 1],
+    homogeneous[which(size == x) , 2]
+  ))
   
   # Label each vector element by count of species 1/species 2.
   names(output) <- paste(size)
@@ -143,12 +144,19 @@ mlogit.regress.predict.f <- function(r, beta, n) {
   distribution <- matrix(0, length(r), n)
   denom <- matrix(0, n, length(r))
   
+  beta <- t(apply(beta, 1, function(x) x))
+  
   # 'denom' is summation term in denominator
-  denom[1:(n - 1), ] <- aaply(beta, 1, function(x) exp(x[1] + x[2] * r))
+  denom[1:(n - 1), ] <-
+    t(apply(beta, 1, function(x)
+      exp(x[1] + x[2] * r)))
+  
   denom <- 1 + colSums(denom)
   
   # Compute probabilities for non-baseline categories
-  distribution[ , 1:(n - 1)] <- t(aaply(beta, 1, function(x) exp(x[1] + x[2] * r) / denom))
+  distribution[, 1:(n - 1)] <-
+    apply(beta, 1, function(x)
+      exp(x[1] + x[2] * r) / denom)
   
   # Add probability for baseline category
   distribution[ , n] <- 1 - rowSums(distribution)
@@ -336,7 +344,10 @@ example.2.f <- function(parameters, dat) {
   ## For each species, compute group probabilities and probability mass of group sizes ----------
   
   # Matrix 'group_size_probmass' contains probability mass (mu) of group sizes (rows, from 1 to the maximum observed group size) for each true species state 1 to 2 (column).
-  group_size_probmass <- t(laply(lambda, function(x) ztpois.probmass.f(x, g)))
+  group_size_probmass <-
+    matrix(vapply(lambda, function(x)
+      ztpois.probmass.f(x, g), numeric(max(g))),
+      ncol = 2)
   dimnames(group_size_probmass) <- list(c(paste0("group_size_", 1:nrow(group_size_probmass))), c(paste0("spp_", 1:2)))
   
   # Function 'group_probability.constant.f' calculates group probabilities (pi) for each true species state, with the '0' function argument specifying homogeneous groups.
@@ -631,7 +642,10 @@ example.4.f <- function(parameters, dat) {
   ## Compute group probabilities and group size probability mass for each species ----------
   
   # Matrix 'group_size_probmass' contains probability mass (mu) for each group size (row, from 1 to the maximum observed group size) and for each true species state 1 to 2 (column)
-  group_size_probmass <- t(laply(lambda, function(x) ztpois.probmass.f(x, g)))
+  group_size_probmass <-
+    matrix(vapply(lambda, function(x)
+      ztpois.probmass.f(x, g), numeric(max(g))),
+      ncol = 2)
   dimnames(group_size_probmass) <- list(c(paste0("group_size_", 1:nrow(group_size_probmass))), c(paste0("spp_", 1:2)))
   
   # Function 'group.probability.constant.f' computes group probabilities (pi) for each true species, assuming a constant heterogeneous group probability parameter (pi.12) as described in the companion article
