@@ -1,5 +1,5 @@
 # murrelet_r_code.R
-# Version 1.1.0
+# Version 1.1.1
 # R code for estimating uncertain identification for 2 species of murrelets 
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
