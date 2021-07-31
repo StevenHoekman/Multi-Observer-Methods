@@ -1,5 +1,5 @@
 # optimization_functions.R
-# Functions for likelihood optimization of models estimating uncertain identification using multi-observer methods, version 1.1.0
+# Functions for likelihood optimization of models estimating uncertain identification using multi-observer methods, version 1.1.1
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code for optimizing multi-observation method (MOM) and single-observation method (SOM) models for estimating uncertain species identification by minimizing the -log(likelihood). These functions are designed to conduct simulation analyses described in the companion article and Appendices S1 to S3. Each function optimizes models with differing predictive covariates, as described in comments of each function and in MetadataS3.pdf. Code developed and tested in R version 4.1.
@@ -128,7 +128,10 @@ optimize.M.f <- function(param, dat, keys, sim_profile){
 ## ----- Compute group probabilities and group size probability mass for each species -----
   
   # Matrix 'group_size_probmass' contains probability mass (mu) for each spp (column) and group size (row) up to maximum observed group size
-  group_size_probmass <- t(laply(lambda, function(x) ztpois.probmass.f(x, g)))
+  group_size_probmass <-
+    matrix(vapply(lambda, function(x)
+      ztpois.probmass.f(x, g), numeric(max(g))),
+      ncol = B)
   
   # Compute group probabilities for the specified heterogeneous group model
   if (mx_model == "constant") {
@@ -543,7 +546,10 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
 ## ----- Compute group probabilities and group size probability mass for each species -----
   
   # Matrix 'group_size_probmass' contains probability mass (mu) for each spp (column) and group size (row) up to maximum observed group size
-  group_size_probmass <- t(laply(lambda, function(x) ztpois.probmass.f(x, g)))
+  group_size_probmass <-
+    matrix(vapply(lambda, function(x)
+      ztpois.probmass.f(x, g), numeric(max(g))),
+      ncol = B)
   
   # Compute group probabilities
   if (mx_model == "constant") {
@@ -901,7 +907,10 @@ optimize.M.theta.p.f <- function(param, dat, sim_profile){
 ## ----- Compute group probabilities and group size probability mass for each species -----
   
   # Matrix 'group_size_probmass' contains probability mass (mu) for each species (column) and group size (row) up to maximum observed group size
-  group_size_probmass <- t(laply(lambda, function(x) ztpois.probmass.f(x, g)))
+  group_size_probmass <-
+    matrix(vapply(lambda, function(x)
+      ztpois.probmass.f(x, g), numeric(max(g))),
+      ncol = B)
   
   # Compute group probabilities
   if (mx_model == "constant") {
@@ -1116,7 +1125,10 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
 ## ----- Compute group probabilities and group size probability mass for each species -----
   
   # Matrix 'group_size_probmass' contains probability mass (mu) for each species (column) and group size (row) up to maximum observed group size
-  group_size_probmass <- t(laply(lambda, function(x) ztpois.probmass.f(x, g)))
+  group_size_probmass <-
+    matrix(vapply(lambda, function(x)
+      ztpois.probmass.f(x, g), numeric(max(g))),
+      ncol = B)
   
   # Compute group probabilities
   
@@ -1472,7 +1484,10 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
 ## ----- Compute group probabilities and group size probability mass for each species -----
   
   # Matrix 'group_size_probmass' contains probability mass (mu) for each species (column) and group size (row) up to maximum observed group size
-  group_size_probmass <- t(laply(lambda, function(x) ztpois.probmass.f(x, g)))
+  group_size_probmass <-
+    matrix(vapply(lambda, function(x)
+      ztpois.probmass.f(x, g), numeric(max(g))),
+      ncol = B)
   
   # Compute matrix of group probabilities for unique observation histories
   group_probability <- mlogit.regress.predict.f(dat$covariate_psi, psi_betas_mat, B)

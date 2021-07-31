@@ -1,5 +1,5 @@
 # Supplemental_functions.R
-# Supplemental functions for analyses and summaries, version 1.1.0
+# Supplemental functions for analyses and summaries, version 1.1.1
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code with supplemental functions for simulation analyses for estimating uncertain identification using multi-observer methods. These functions provide supplemental services such as: drawing random samples from probability distributions; computing probabilities and other values used in likelihood computations; and generating, formatting, summarizing, and error-checking simulation data and statistical output. Functions are grouped according by purpose. Comments with each function describe its purpose, inputs and outputs, and functioning of the code. Code developed and tested in R version 4.1.
@@ -75,12 +75,19 @@ mlogit.regress.predict.f <- function(r, beta, n) {
   distribution <- matrix(0, length(r), n)
   denom <- matrix(0, n, length(r))
   
+  beta <- t(apply(beta, 1, function(x) x))
+  
   # 'denom' is summation term in denominator
-  denom[1:(n - 1), ] <- aaply(beta, 1, function(x) exp(x[1] + x[2] * r))
+  denom[1:(n - 1), ] <-
+    t(apply(beta, 1, function(x)
+      exp(x[1] + x[2] * r)))
+  
   denom <- 1 + colSums(denom)
   
   # Compute probabilities for non-baseline categories
-  distribution[ , 1:(n - 1)] <- t(aaply(beta, 1, function(x) exp(x[1] + x[2] * r) / denom))
+  distribution[, 1:(n - 1)] <-
+    apply(beta, 1, function(x)
+      exp(x[1] + x[2] * r) / denom)
   
   # Add probability for baseline category
   distribution[ , n] <- 1 - rowSums(distribution)
@@ -178,7 +185,7 @@ group.true.probability.key.f <- function(group_probability, size_probability, si
     homogeneous <-
       vapply(1:B, function(x)
         group_probability[x] * size_probability[size, x], numeric(length(size)))
-    output <- llply(size, function(x) c(
+    output <- lapply(size, function(x) c(
       homogeneous[which(size == x) , 1],
       group_probability[3] * size_probability[0:(x - 1), 2] * size_probability[(x - 1):0, 1],
       homogeneous[which(size == x) , 2]
@@ -474,7 +481,6 @@ group.probability.psi.constant.f <- function(p, m, g) {
 }
 
 # Function: {group.probability.encounter.pro.f}: Calculates group probabilities (pi) for homogeneous or heterogeneous (limited to 3 true species states) groups. For heterogeneous groups, uses the "encounter" group probability model described in the companion article in Appendix S3: Eqs. S3, S4. Accepts inputs of a matrix of true species probabilities 'p' for individual observation records (rows), heterogeneous group parameters 'm', and a vector of unique observed group sizes 'g'. Returns a list with group probabilities, heterogeneous group parameters, and a penalty term to the -log(likelihood) for violating model constraints.
-
 group.probability.psi.encounter.f <- function(p, m, g) {
   
   # For all models, compute group probabilities (pi) for each unique observation history from true species probabilities 'p' (psi) accounting for mean group sizes
