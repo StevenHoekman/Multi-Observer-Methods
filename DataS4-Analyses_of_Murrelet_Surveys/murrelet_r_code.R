@@ -9,7 +9,6 @@
 #             Load R packages
 ###############################################################################
 
-library(plyr)   # Programming tools, data manipulation
 library(dplyr)  # Data frame manipulation
 
 ###############################################################################
@@ -36,12 +35,19 @@ mlogit.regress.predict.f <- function(r, beta, n) {
   distribution <- matrix(0, length(r), n)
   denom <- matrix(0, n, length(r))
   
+  beta <- t(apply(beta, 1, function(x) x))
+  
   # 'denom' is summation term in denominator
-  denom[1:(n - 1), ] <- aaply(beta, 1, function(x) exp(x[1] + x[2] * r))
+  denom[1:(n - 1), ] <-
+    t(apply(beta, 1, function(x)
+      exp(x[1] + x[2] * r)))
+  
   denom <- 1 + colSums(denom)
   
   # Compute probabilities for non-baseline categories
-  distribution[ , 1:(n - 1)] <- t(aaply(beta, 1, function(x) exp(x[1] + x[2] * r) / denom))
+  distribution[, 1:(n - 1)] <-
+    apply(beta, 1, function(x)
+      exp(x[1] + x[2] * r) / denom)
   
   # Add probability for baseline category
   distribution[ , n] <- 1 - rowSums(distribution)
@@ -233,13 +239,14 @@ murrelet.model.f <- function(parameters, dat){
   
   # Extract mean group size parameters for each species to vector 'group_size_mean'
   
-  group_size_mean <- aaply(group_distribution_parameters, 1, function(x)
+  group_size_mean <- apply(group_distribution_parameters, 1, function(x)
     (1 + x[1]) * x[3] + (2 + 1 / x[2]) * (1 - x[3]))
   
   ## Calculate group probabilities and group size probability mass for each species ----------
   # The matrix 'group_size_probmass' contains probability mass (mu) for each species (column) and group size (row) up to the maximum observed group size.
   
-  group_size_probmass <- t(aaply(group_distribution_parameters, 1, group.probmass.f, dat = dat))
+  group_size_probmass <- apply(group_distribution_parameters, 1, group.probmass.f, dat = dat)
+  
   rownames(group_size_probmass) <- c(paste0("group_size_", 1:nrow(group_size_probmass)))
   
   # Make matrix of group probabilities (prior to formation of heterogeneous groups) for each observation history
