@@ -1,5 +1,5 @@
 # optimization_functions.R
-# Functions for likelihood optimization of models estimating uncertain identification using multi-observer methods, version 1.1.1
+# Functions for likelihood optimization of models estimating uncertain identification using multi-observer methods, version 1.1.2
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code for optimizing multi-observation method (MOM) and single-observation method (SOM) models for estimating uncertain species identification by minimizing the -log(likelihood). These functions are designed to conduct simulation analyses described in the companion article and Appendices S1 to S3. Each function optimizes models with differing predictive covariates, as described in comments of each function and in MetadataS3.pdf. Code developed and tested in R version 4.1.
@@ -64,10 +64,10 @@ optimize.M.f <- function(param, dat, keys, sim_profile){
     
   # With identical secondary observers, apply classification probabilities for 1st to all
   }else{
-    theta_mat <- matrix(plogis(param[1:length(theta_col)]), ncol = B * (A - 1), byrow = T)
+    theta_mat <- matrix(plogis(param[1:length(theta_col)]), ncol = B * (A - 1), byrow = TRUE)
     theta_tmp <- array(0, c(A - 1, B, n_observers))
     for (i in 1:n_observers) {
-      if (nrow(theta_mat) >= i) {
+      if (dim(theta_mat)[1] >= i) {
         theta_tmp[, , i] <- theta_mat[i, ]
       }else{
         theta_tmp[, , i] <- theta_tmp[, , (i - 1)]
@@ -96,8 +96,8 @@ optimize.M.f <- function(param, dat, keys, sim_profile){
   if (any(colSums(theta_tmp) > 1)) {
     sums <- colSums(theta_tmp)
     penalty <- penalty + penalty.f(sums[sums > 1])
-    col <- which(colSums(theta_tmp) > 1, arr.ind = T)
-    for (i in 1:nrow(col)) {
+    col <- which(colSums(theta_tmp) > 1, arr.ind = TRUE)
+    for (i in 1:dim(col)[1]) {
       theta_tmp[, col[i, 1], col[i, 2]] <- sum1.f(theta_tmp[, col[i, 1], col[i, 2]])
     }
   }
@@ -150,7 +150,7 @@ optimize.M.f <- function(param, dat, keys, sim_profile){
 ## ----- Compute -log(likelihood) for data conditional on estimated parameter values -----
   
   # Vector 'likelihood' contains likelihoods for each unique observation history
-  likelihood <- numeric(nrow(dat))
+  likelihood <- numeric(dim(dat)[1])
 
 ## ----- Compute likelihoods: group size = 1 -----
   if (g1 > 0) { 
@@ -171,7 +171,7 @@ optimize.M.f <- function(param, dat, keys, sim_profile){
     
     probability_mat <- matrix(0, g1, B)
     for (b in 1:B) {
-      probability_mat[, b] <- apply(group1_obs_cprobability[, b, , drop = F], 1, function(x) 
+      probability_mat[, b] <- apply(group1_obs_cprobability[, b, , drop = FALSE], 1, function(x) 
         group_probability[b] * group_size_probmass[1, b] * prod(x))
     }
     # Likelihoods for each unique observation history are the summed probabilities for each true species state
@@ -217,7 +217,7 @@ optimize.M.f <- function(param, dat, keys, sim_profile){
         # Add likelihoods for group sizes >1 to 'likelihood'. Likelihoods for each unique observation history are computed as the product of each row in 'probability_mat' summed across all possible combinations of true groups for that unique observation history. 
           
         likelihood[pmatch(0, likelihood):length(likelihood)] <-
-          bind_cols(index, data.frame(product = vapply(1:nrow(probability_mat), function(x)
+          bind_cols(index, data.frame(product = vapply(1:dim(probability_mat)[1], function(x)
             prod(probability_mat[x, ]), numeric(1)))) %>%
           group_by(index) %>%
           summarise(likelihood = sum(product)) %>%
@@ -344,7 +344,7 @@ optimize.M.f <- function(param, dat, keys, sim_profile){
       # Add likelihoods for group sizes >1 to 'likelihood'. Likelihoods for each unique observation history are calculated as the product of each row in 'probability_mat' summed across all possible combinations of true groups for that unique observation history. 
       
       likelihood[pmatch(0, likelihood):length(likelihood)] <-
-        bind_cols(index, as_tibble(vapply(1:nrow(probability_mat), function(x)
+        bind_cols(index, as_tibble(vapply(1:dim(probability_mat)[1], function(x)
           prod(probability_mat[x,]), numeric(1)))) %>%
         group_by(index) %>%
         summarise(likelihood = sum(value)) %>%
@@ -431,13 +431,13 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
   
   # With key table use unique combinations of observed groups and covariate values for likelihood computations. Without, use unique combinations of observation histories and covariate values.
   if (is.null(keys)) {
-    n_unique <- nrow(dat) # Number of unique observation histories
+    n_unique <- dim(dat)[1] # Number of unique observation histories
     theta_cov <- rbind(dat$covariate_theta, dat$covariate_theta) # Covariate values for unique observation histories
     if (sim_profile$Model == 'M.theta.ps') {
       theta_cov[2, ] <- dat$covariate_theta_s
     }
   }else{
-    n_unique <- nrow(keys) # Number of keyed observed groups
+    n_unique <- dim(keys)[1] # Number of keyed observed groups
     theta_cov <- rbind(keys$covariate_theta, keys$covariate_theta) # Covariate values for keyed groups
 
   }
@@ -464,8 +464,8 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
       
       theta_arr <- array(0, dim = c(4, n_unique, 5))
       for (obs in 1:2) {
-        theta_arr[c(3, 1), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[1, , obs, drop = F], A))
-        theta_arr[c(2, 4), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[2, , obs, drop = F], A))
+        theta_arr[c(3, 1), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[1, , obs, drop = FALSE], A))
+        theta_arr[c(2, 4), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[2, , obs, drop = FALSE], A))
       }
 
     }else {
@@ -487,8 +487,8 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
     }
     
     for (obs in 1:2) {
-      theta_arr[c(3, 5, 1), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , obs + (obs - 1), drop = F], A))
-      theta_arr[c(2, 6, 4), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , obs * 2, drop = F], A))
+      theta_arr[c(3, 5, 1), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , obs + (obs - 1), drop = FALSE], A))
+      theta_arr[c(2, 6, 4), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , obs * 2, drop = FALSE], A))
     }
   }
 }else if (B == 3 & A == 3) {
@@ -512,9 +512,9 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
   }
   
   for (obs in 1:2) {
-    theta_arr[c(4, 7, 1), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , 1, obs, drop = F], A))
-    theta_arr[c(2, 8, 5), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , 2, obs, drop = F], A))
-    theta_arr[c(3, 6, 9), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , 3, obs, drop = F], A))
+    theta_arr[c(4, 7, 1), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , 1, obs, drop = FALSE], A))
+    theta_arr[c(2, 8, 5), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , 2, obs, drop = FALSE], A))
+    theta_arr[c(3, 6, 9), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , 3, obs, drop = FALSE], A))
   }
 }
   
@@ -566,7 +566,7 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
 ## ----- Compute -log(likelihood) for data conditional on estimated parameter values -----
   
   # Vector 'likelihood' contains likelihoods for each unique observation history
-  likelihood <- numeric(nrow(dat))
+  likelihood <- numeric(dim(dat)[1])
   # 'n_group_size' = count of unique observation histories by group size
   n_group_size <-  dat  %>% count(group_size) 
   
@@ -575,8 +575,8 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
     # List 'group_true_probability' contains elements named with each observed group size each containing a vector (named with counts of each spp 1 to B) giving probabilities for each possible true group
 
     group_true_probability <-
-      alply(group_size_probmass, 1, function(x)
-        x * matrix(group_probability, nrow = 1))
+      lapply(1:dim(group_size_probmass)[1], function(x)
+        group_size_probmass[x, ] * matrix(group_probability, nrow = 1))
     names(group_true_probability) <- paste(1:max(g))
     
     # If key table of unique observed groups is present, compute likelihoods from keyed table of probabilities
@@ -592,7 +592,7 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
       )
       
       # Positive integers in 'index' associate rows in 'probability_mat' with sequentially numbered unique observation histories
-      index <- tibble(index = unlist(lapply(1:nrow(n_group_size), function(x)
+      index <- tibble(index = unlist(lapply(1:dim(n_group_size)[1], function(x)
         rep(1:n_group_size[[x, 2]], each = B) + sum(n_group_size[n_group_size[[1, 1]]:n_group_size[[x, 1]] , 2]) - n_group_size[[x, 2]] ))
       )
       
@@ -610,7 +610,7 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
       # Add likelihoods for group sizes >1 to 'likelihood'. Likelihoods for each unique observation history are calculated as the product of each row in 'probability_mat' summed across possible true groups. 
       
       likelihood <-
-        bind_cols(index, data.frame(product = vapply(1:nrow(probability_mat), function(x)
+        bind_cols(index, data.frame(product = vapply(1:dim(probability_mat)[1], function(x)
           prod(probability_mat[x, ]), numeric(1)))) %>%
         group_by(index) %>%
         summarise(likelihood = sum(product)) %>%
@@ -633,7 +633,8 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
               rep(numeric(1), n_i * B * n_observers),
               rep(group_true_probability[[i]], n_i)
             ), 
-            ncol =  n_observers + 1))
+            ncol =  n_observers + 1,
+            dimnames = list(c(), c(paste0("obs", 1:n_observers), "group"))))
 
         # Add condition probabilities of observed groups for each observer
         
@@ -714,7 +715,7 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
       
       # Add likelihoods for current group size to 'likelihood'. Likelihoods for each observation history are calculated as the product of each row in 'probability_mat' summed across possible true groups.
       likelihood[rows_i] <-
-        bind_cols(index, data.frame(product = vapply(1:nrow(probability_mat), function(x)
+        bind_cols(index, data.frame(product = vapply(1:dim(probability_mat)[1], function(x)
           prod(probability_mat[x, ]), numeric(1)))) %>%
         group_by(index) %>%
         summarise(likelihood = sum(product)) %>%
@@ -806,7 +807,7 @@ optimize.M.theta.p.f <- function(param, dat, sim_profile){
   # True species probabilities (psi) for species 1 to (B - 1)
   psi <- plogis(param[(sum(n_parameters[1:3]) - B + 2):sum(n_parameters[1:3])])
   
-  n_unique <- nrow(dat) # Number of unique observation histories
+  n_unique <- dim(dat)[1] # Number of unique observation histories
 
   if (B == 2) {
     if (A == 2) {
@@ -826,8 +827,8 @@ optimize.M.theta.p.f <- function(param, dat, sim_profile){
       
       theta_arr <- array(0, dim = c(4, n_unique, 4))
       
-      theta_arr[c(3, 1), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[1, , drop = F], A))
-      theta_arr[c(2, 4), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[2, , drop = F], A))
+      theta_arr[c(3, 1), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[1, , drop = FALSE], A))
+      theta_arr[c(2, 4), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[2, , drop = FALSE], A))
       
       theta_arr[c(1, 3),  , 2] <- c(1 - param_s[1], param_s[1])
       theta_arr[c(2, 4),  , 2] <- c(param_s[2], 1 - param_s[2])
@@ -848,8 +849,8 @@ optimize.M.theta.p.f <- function(param, dat, sim_profile){
       
       theta_arr <- array(0, dim = c(6, n_unique, 4))
       
-      theta_arr[c(3, 5, 1), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 1, drop = F], A))
-      theta_arr[c(2, 6, 4), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 2, drop = F], A))
+      theta_arr[c(3, 5, 1), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 1, drop = FALSE], A))
+      theta_arr[c(2, 6, 4), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 2, drop = FALSE], A))
       
       theta_arr[c(1, 3, 5),  , 2] <- c(1 - sum(param_s[1:2]), param_s[1:2])
       theta_arr[c(2, 4, 6),  , 2] <- c(param_s[3], 1 - sum(param_s[3:4]), param_s[4])
@@ -870,9 +871,9 @@ optimize.M.theta.p.f <- function(param, dat, sim_profile){
     
     theta_arr <- array(0, dim = c(9, n_unique, 4))
     
-    theta_arr[c(4, 7, 1), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 1, drop = F], A))
-    theta_arr[c(2, 8, 5), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 2, drop = F], A))
-    theta_arr[c(3, 6, 9), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 3, drop = F], A))
+    theta_arr[c(4, 7, 1), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 1, drop = FALSE], A))
+    theta_arr[c(2, 8, 5), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 2, drop = FALSE], A))
+    theta_arr[c(3, 6, 9), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 3, drop = FALSE], A))
     
     theta_arr[c(1, 4, 7),  , 2] <- c(1 - sum(param_s[1:2]), param_s[1:2])
     theta_arr[c(2, 5, 8),  , 2] <- c(param_s[3], 1 - sum(param_s[3:4]), param_s[4])
@@ -927,7 +928,7 @@ optimize.M.theta.p.f <- function(param, dat, sim_profile){
 ## ----- Compute -log(likelihood) for data conditional on estimated parameter values -----
   
   # Vector 'likelihood' contains likelihoods for each unique observation history
-  likelihood <- numeric(nrow(dat))
+  likelihood <- numeric(dim(dat)[1])
   
   # 'n_group_size' = count of unique observation histories by group size
   n_group_size <-  dat  %>% count(group_size) 
@@ -937,8 +938,8 @@ optimize.M.theta.p.f <- function(param, dat, sim_profile){
     # List 'group_true_probability' contains elements named with each observed group size each containing a vector (named with counts of each species 1 to B) giving probabilities for each possible true group
     
     group_true_probability <-
-      alply(group_size_probmass, 1, function(x)
-        x * matrix(group_probability, nrow = 1))
+      lapply(1:dim(group_size_probmass)[1], function(x)
+        group_size_probmass[x,] * matrix(group_probability, nrow = 1))
     names(group_true_probability) <- paste(1:max(g))
     
     # Loop for observed group sizes
@@ -1078,10 +1079,10 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
     # With identical secondary observers, apply classification probabilities for 1st to all
   }else{
     theta_mat <- matrix(plogis(param[(sum(n_parameters[1:2]) + 1):(sum(n_parameters[1:3]))]),
-                       ncol = B * (A - 1), byrow = T)
+                       ncol = B * (A - 1), byrow = TRUE)
     theta_tmp <- array(0, c(A - 1, B, n_observers))
     for (i in 1:n_observers) {
-      if (nrow(theta_mat) >= i) {
+      if (dim(theta_mat)[1] >= i) {
         theta_tmp[, , i] <- theta_mat[i, ]
       }else{
         theta_tmp[, , i] <- theta_tmp[, , (i - 1)]
@@ -1091,7 +1092,7 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
   
   # Extract true species probability regression coefficients to matrix 'psi_betas_mat'
   psi_betas_mat <- matrix(param[1:(sum(n_parameters[1:2]))], 
-                      nrow = (B - 1), byrow = T)
+                      nrow = (B - 1), byrow = TRUE)
   
   # Enforce constraints for probabilities that must sum to 1. The 'penalty' term added to the -log(likelihood) increases with the magnitude of violations of constraints. 
   penalty <- 0
@@ -1099,8 +1100,8 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
   if (any(colSums(theta_tmp) > 1)) {
     sums <- colSums(theta_tmp)
     penalty <- penalty + penalty.f(sums[sums > 1])
-    col <- which(colSums(theta_tmp) > 1, arr.ind = T)
-    for (i in 1:nrow(col)) {
+    col <- which(colSums(theta_tmp) > 1, arr.ind = TRUE)
+    for (i in 1:dim(col)[1]) {
       theta_tmp[, col[i, 1], col[i, 2]] <- sum1.f(theta_tmp[, col[i, 1], col[i, 2]])
     }
   }
@@ -1114,7 +1115,7 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
   # Matrix 'theta_mat' summarizes classification probabilities (theta) of each observer as a vector for efficient computation
   # row = observers, column = classification probabilities 1 to A in sequence for spp 1 to B
 
-  n_unique <- nrow(dat)
+  n_unique <- dim(dat)[1]
   theta_mat <- t(vapply(1:n_observers, theta4.f, numeric(B * A), theta_tmp))
   
   # Vector 'lambda' contains lambda parameters (defined by mean group size) of zero-truncated Poisson distribution for species 1 to B
@@ -1180,7 +1181,7 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
 ## ----- Compute -log(likelihood) for data conditional on estimated parameter values -----
   
   # Vector 'likelihood' contains likelihoods for each unique observation history
-  likelihood <- numeric(nrow(dat))
+  likelihood <- numeric(dim(dat)[1])
   # 'n_group_size' = count of unique observation histories by group size
   n_group_size <-  dat  %>% count(group_size)
   
@@ -1204,7 +1205,7 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
       )
 
       # Positive integers in 'index' associate rows in 'probability_mat' with sequentially numbered unique observation histories
-      index <- tibble(index = unlist(lapply(1:nrow(n_group_size), function(x)
+      index <- tibble(index = unlist(lapply(1:dim(n_group_size)[1], function(x)
         rep(1:n_group_size[[x, 2]], each = B) + sum(n_group_size[n_group_size[[1, 1]]:n_group_size[[x, 1]] , 2]) - n_group_size[[x, 2]] ))
       )
       
@@ -1221,7 +1222,7 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
       # Add likelihoods for group sizes >1 to 'likelihood'. Likelihoods for each unique observation history are calculated as the product of each row in 'probability_mat' summed across possible true groups. 
       
       likelihood <-
-        bind_cols(index, data.frame(product = vapply(1:nrow(probability_mat), function(x)
+        bind_cols(index, data.frame(product = vapply(1:dim(probability_mat)[1], function(x)
           prod(probability_mat[x, ]), numeric(1)))) %>%
         group_by(index) %>%
         summarise(likelihood = sum(product)) %>%
@@ -1326,7 +1327,7 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
         # Add likelihoods for current group size to 'likelihood'. Likelihoods for each observation history are calculated as the product of each row in 'probability_mat' summed across possible true groups.
         
         likelihood[rows_i] <-
-          bind_cols(index, data.frame(product = vapply(1:nrow(probability_mat), function(x)
+          bind_cols(index, data.frame(product = vapply(1:dim(probability_mat)[1], function(x)
             prod(probability_mat[x, ]), numeric(1)))) %>%
           group_by(index) %>%
           summarise(likelihood = sum(product)) %>%
@@ -1344,10 +1345,10 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
         
         # Matrix 'group_true_probability' contains probabilities of possible true groups, with columns for each unique observation history of the current group size and rows giving probabilities for each possible true group.
         group_true_probability <-
-          apply(group_probability[rows_i, , drop = F], 1, group.true.probability.f, group_size_probmass, i)
+          apply(group_probability[rows_i, , drop = FALSE], 1, group.true.probability.f, group_size_probmass, i)
         
         # 'B_states' is the number of possible true groups for the current group size
-        B_states <- nrow(group_true_probability)
+        B_states <- dim(group_true_probability)[1]
         
         # Matrix 'probability_mat' contains probabilities of observations by each observer (cols = 1 to n_observers) and probabilities of true groups (last col). Rows correspond to each possible true group for unique observation histories.
         
@@ -1420,13 +1421,13 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
   # Extract multinomial regression coefficients for classification probabilities to matrices 'theta_b0' and 'theta_b1'  (b0 = intercept parameters and b1 = slope parameters). Columns give coefficients for each classification probability, and observers are on each row. 
 
   n_psi_param <- length(grep("psi", names(sim_profile)))
-  psi_betas_mat <- matrix(param[1:n_psi_param], nrow = (B - 1), byrow = T)
+  psi_betas_mat <- matrix(param[1:n_psi_param], nrow = (B - 1), byrow = TRUE)
   theta_b0 <- length(grep("b0_theta", names(sim_profile)))
   theta_b1 <- length(grep("b1_theta", names(sim_profile)))
   theta_b1 <- matrix(param[(n_psi_param + theta_b0 + 1):(sum(n_psi_param, theta_b0, theta_b1))]
-                   , nrow = 2, ncol = 2, byrow = T)
+                   , nrow = 2, ncol = 2, byrow = TRUE)
   theta_b0 <- matrix(param[(n_psi_param + 1):(n_psi_param + theta_b0)]
-                   , nrow = 2, ncol = 2, byrow = T)
+                   , nrow = 2, ncol = 2, byrow = TRUE)
 
   # The 'penalty' term is added to the -log(likelihood) and increases with the magnitude of violations of constraints
   penalty <- 0
@@ -1440,7 +1441,7 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
   
   # Array 'theta_arr' summarizes classification probabilities (theta) of observers as vectors for efficient computation. Vectors are stored in an array with Dimension 1 (row) = classification probabilities 1 to A for species 1 to B, dimension 2 (column) = unique observation histories, and dimension 3 (matrix) = observer. Multinomial logit link functions enforce that each column (dimension 2) of each array sums to 1. Baseline category is correct classification y = z. Regression coefficients predicting classification probabilities based on group-level covariates are summarized in the 'theta_betas_arr' array.
   
-  n_unique <- nrow(dat) # Number of unique observation histories
+  n_unique <- dim(dat)[1] # Number of unique observation histories
 
   # Code for B = 2 with A = 2 or A = 3 only
   if (B == 2) {
@@ -1454,8 +1455,8 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
       
       theta_arr <- array(0, dim = c(4, n_unique, 4))
       for (b in 1:B) {
-        theta_arr[c(3, 1), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[1, , b, drop = F], A))
-        theta_arr[c(2, 4), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[2, , b, drop = F], A))
+        theta_arr[c(3, 1), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[1, , b, drop = FALSE], A))
+        theta_arr[c(2, 4), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[2, , b, drop = FALSE], A))
       }
     }else{
       # True species states (B) = 2, observation states (A) = 3 
@@ -1467,8 +1468,8 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
                      , dim = c(2, 2, 4))
       
       for (b in 1:B) {
-        theta_arr[c(3, 5, 1), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[, , b + (b - 1), drop = F], A))
-        theta_arr[c(2, 6, 4), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[, , b * 2, drop = F], A))
+        theta_arr[c(3, 5, 1), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[, , b + (b - 1), drop = FALSE], A))
+        theta_arr[c(2, 6, 4), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[, , b * 2, drop = FALSE], A))
       }
     }
   }
@@ -1510,7 +1511,7 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
 ## ----- Compute -log(likelihood) for data conditional on estimated parameter values -----
   
   # Vector 'likelihood' contains likelihoods for each unique observation history
-  likelihood <- numeric(nrow(dat))
+  likelihood <- numeric(dim(dat)[1])
   
   # 'n_group_size' = count of unique observation histories by group size
   n_group_size <-  dat  %>% count(group_size)
@@ -1534,7 +1535,8 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
             rep(numeric(1), n_i * B * n_observers),
             t(group_true_probability_mat[rows_i, ])
           )
-          , ncol =  n_observers + 1))
+          , ncol =  n_observers + 1,
+          dimnames = list(c(), c(paste0("obs", 1:n_observers), "group"))))
       
       # Add conditional probabilities of observed groups for each observer
       
@@ -1572,9 +1574,9 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
       
       # Matrix 'group_true_probability_mat' contains probabilities for possible true groups, with rows for each unique observation history columns for each true species state 1 to B.
       group_true_probability_mat <-
-        apply(group_probability[rows_i, , drop = F], 1, group.true.probability.f, group_size_probmass, i)
+        apply(group_probability[rows_i, , drop = FALSE], 1, group.true.probability.f, group_size_probmass, i)
       
-      B_states <- nrow(group_true_probability_mat) # Number of combinations of true states for the current group size
+      B_states <- dim(group_true_probability_mat)[1] # Number of combinations of true states for the current group size
       
       # Columns in the matrix 'probability_mat' contain probabilities of observed groups (conditional on possible true groups) for each observer and probabilities of true groups (last col). Rows correspond to possible true groups for unique observation histories.
       

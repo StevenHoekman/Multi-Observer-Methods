@@ -1,5 +1,5 @@
 # murrelet_r_code.R
-# Version 1.1.1
+# Version 1.1.2
 # R code for estimating uncertain identification for 2 species of murrelets 
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
@@ -78,10 +78,10 @@ group.probability.psi.constant.f <- function(p, m, g) {
     negative_values <- which(p < 0)
     cat("Warning: Mixing probability of ", m," reduced because", length(negative_values), "probabilities of Psi for individual groups were <0", "\n")
     pen <- pen + (1 + -sum(p[negative_values]) * 10) ^ 2
-    negative_rows <- negative_values %% nrow(p)
-    negative_rows[which(negative_rows == 0)] <- nrow(p)
-    p[negative_rows, ncol(p)] <- 
-      p[negative_rows, ncol(p)] + p[negative_values]
+    negative_rows <- negative_values %% dim(p)[1]
+    negative_rows[which(negative_rows == 0)] <- dim(p)[1]
+    p[negative_rows, dim(p)[2]] <- 
+      p[negative_rows, dim(p)[2]] + p[negative_values]
     p[negative_values] <- 0
   }
   return(list(p, m, pen))
@@ -196,21 +196,23 @@ murrelet.model.f <- function(parameters, dat){
   
   # Matrix 'distance' contains distance (perpendicular distance from the transect center line in decameters) and distance^2 covariate values for each observation history
   
+  nrow_dat <- dim(dat)[1]
+  
   distance <- matrix(
     c(dat$perpendicular_distance, dat$perpendicular_distance ^ 2),
     ncol = 2,
     dimnames = list(c(
-      paste0("obs_history_", 1:nrow(dat))
+      paste0("obs_history_", 1:nrow_dat)
     ), c("distance", "distance^2"))
   )
   
   # Array 'theta_arr' contains classification probabilities (arranged as vectors for efficient computation). Multinomial logit link functions enforce that probabilities for each observer and true species state sum to 1. The reference category is correct classification y = z.
   # Dimension 1 (row) = classification probabilities (theta), dimension 2 (column) = observation histories, and dimension 3 (matrix) = observers (primary and 3 secondary). 
   
-  theta_arr <- array(0, dim = c(6, nrow(dat), 4), 
+  theta_arr <- array(0, dim = c(6, nrow_dat, 4), 
                      dimnames = list(
                        c("theta_11",	"theta_12",	"theta_21",	"theta_22",	"theta_31",	"theta_32"),
-                       c(paste0("obs_history_", 1:nrow(dat))),
+                       c(paste0("obs_history_", 1:nrow_dat)),
                        c("primary", paste0("secondary_", 1:3))
                      ))
   
@@ -247,7 +249,7 @@ murrelet.model.f <- function(parameters, dat){
   
   group_size_probmass <- apply(group_distribution_parameters, 1, group.probmass.f, dat = dat)
   
-  rownames(group_size_probmass) <- c(paste0("group_size_", 1:nrow(group_size_probmass)))
+  rownames(group_size_probmass) <- c(paste0("group_size_", 1:dim(group_size_probmass)[1]))
   
   # Make matrix of group probabilities (prior to formation of heterogeneous groups) for each observation history
   group_probability <- mlogit.regress.predict.f(dat$density_area, psi_1, 2)
@@ -256,14 +258,14 @@ murrelet.model.f <- function(parameters, dat){
   
   # The vector 'group_probability' gives the group probabilities (pi) for occurrence of groups of each species (pi.1, pi.2) and heterogeneous groups (pi.12).
   group_probability <- output[[1]]
-  dimnames(group_probability) <- list(c(paste0("obs_history_", 1:nrow(dat))), c("pi.1", "pi.2", "pi.12"))
+  dimnames(group_probability) <- list(c(paste0("obs_history_", 1:nrow_dat)), c("pi.1", "pi.2", "pi.12"))
   
   # Enforce constraint the group probabilities for species 1 and 2 don't exceed 1. The 'penalty' term added to the -log(likelihood) scales with the magnitude of violation of the constraint. 
   penalty <- output[[3]] 
   
   ## Compute -log{Likelihood} (nLL) for data conditional on estimated parameter values ----------
   # Vector 'likelihood' contains probabilities for each unique observation history
-  likelihood <- numeric(nrow(dat))
+  likelihood <- numeric(nrow_dat)
   n_group_size <-  dat  %>% count(group_size) # Sample of observation histories by group size
   
   # Loop for each observed group size
@@ -275,7 +277,7 @@ murrelet.model.f <- function(parameters, dat){
     group_true_probability <-
       apply(group_probability[rows_i, , drop = F], 1, group.true.probability.f, group_size_probmass, i)
     
-    B_states <- nrow(group_true_probability) # Number of possible true groups
+    B_states <- dim(group_true_probability)[1] # Number of possible true groups
     
     # For the current group size, matrix 'likelihood_i' contains probabilities of observed groups (conditional on possible true groups) for each observer (columns 1 to 4) and probabilities of true groups (column 5). 
     likelihood_i <-

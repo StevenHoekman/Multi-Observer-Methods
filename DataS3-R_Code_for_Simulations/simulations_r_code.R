@@ -1,5 +1,5 @@
 # simulations_R_code.R
-# Simulation engine for estimating uncertain identification using multi-observer methods, version 1.1.0
+# Simulation engine for estimating uncertain identification using multi-observer methods, version 1.1.1
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code used to conduct "omnibus", "covariate", and "distinct observer" simulation analyses using multi-observer methods. Simulations rely on input in .csv file format (described in DataS2), which can be altered to conduct user-specified simulations. For multiple-observation method (MOM) and single-observation (SOM) method models and 2 to 4 species, code generates and analyzes simulated survey data, with summary output written to .csv format files. Descriptions of statistical methods are provided in the companion article and Appendices S1 to S3. Descriptions of R objects containing simulated survey data ('sim_data'), statistical output ('model_results'), and summarized simulation output ('output_global') are provided in DataS3. Code developed and tested in R version 4.1.
@@ -47,12 +47,13 @@ stopCluster(cl)
 # User-specified .csv format input/output files for simulations
 # Do not include .csv file extension
 in_filename <- "omnibus_m_22_example"
-out_filename <- paste(in_filename, "_output.csv", sep = "")
+out_filename <- paste0(in_filename, "_output.csv")
 
 # Vectors 'sim.const'/'sim_variables' contain simulation inputs that are constant/variable across distinct models
-sim_constants <- as.list(read.csv(paste(in_filename, ".csv" , sep = ""), header = T, skip = 4, nrows = 1, as.is = T)[, 1:10])
-sim_variables <- read.csv(paste(in_filename, ".csv" , sep = ""), header = T, skip = 9, as.is = T)
-sim_variables <- sim_variables[, grep("X", colnames(sim_variables), invert = T)]
+sim_constants <- as.list(read.csv(paste0(in_filename, ".csv"), header = TRUE, skip = 4, nrows = 1, as.is = TRUE))
+sim_variables <- read.csv(paste0(in_filename, ".csv"), header = TRUE, skip = 9, as.is = TRUE)
+sim_constants <- sim_constants[!is.na(sim_constants)]
+sim_variables <- sim_variables[, !is.na(sim_variables[1, ])]
 sim_constants <- format.sim.constant.f(sim_constants)
 
 # Data frame 'sim_profiles' defines simulations, with 1 distinct model per row
@@ -61,16 +62,20 @@ profiles_names <- names(sim_profiles) # Field names
 
 # Vector 'parameter_names_global' contains parameters names across all models
 parameters_names_global <-
-  c(grep("b0|b1|psi|theta", profiles_names, value = T))
+  c(grep("b0|b1|psi|theta", profiles_names, value = TRUE))
 if (any(sim_profiles[grep("^g_[0123456789]", profiles_names)] > 1)) {
   parameters_names_global <-
     c(parameters_names_global,
-      grep("^g_[0123456789]", profiles_names, value = T))
+      grep("^g_[0123456789]", profiles_names, value = TRUE))
 }
 mix_col <- grep("mix", profiles_names) # Column #s of parameters for estimating heterogeneous groups
 if (any(sim_profiles[, mix_col] > 0)) {
   parameters_names_global <- c(parameters_names_global, profiles_names[mix_col])
 }
+
+# Set random number seed for repeatable results
+if (any(colnames(sim_profiles) == "seed"))
+  {set.seed(eval(parse(text = sim_profiles$seed[1]))) ; sim_data_list <- NULL}
 
 model <- sim_profiles$Model[1] # Model specification
 A <- sim_profiles$A[1]; B <- sim_profiles$B[1] # # of observation (A) and true species (B) states 
@@ -166,7 +171,7 @@ if (model == "M") {
   output_global <- data.frame(output_global)
   
   # Loop for sequentially executing simulations for distinct models on each row of 'sim_profiles'
-  for (sim in 1:nrow(sim_profiles)) { 
+  for (sim in 1:dim(sim_profiles)[1]) { 
     
     ## Define objects for simulation of the current distinct model
     
@@ -178,11 +183,11 @@ if (model == "M") {
     # Add logit parameters for uncertain identification probabilities (theta) and true species probabilities (psi)
     n_parameters <- c(0, 0, length(grep("b0|b1|psi|theta", parameters_names_global)), 0, 0)
     parameters_col <- grep("b0|b1|psi|theta", profiles_names) # Column #s of parameters for estimating psi & theta
-    parameters_names <- c( grep("b0|b1|psi|theta", parameters_names_global, value = T))
+    parameters_names <- c( grep("b0|b1|psi|theta", parameters_names_global, value = TRUE))
     
     # Add parameters for mean group size g
     if (any(sim_profiles[sim, grep("^g_[0123456789]", profiles_names)] > 1)) {
-      parameters_names <- c(parameters_names, grep("^g_[0123456789]", parameters_names_global, value = T))
+      parameters_names <- c(parameters_names, grep("^g_[0123456789]", parameters_names_global, value = TRUE))
       parameters_col <- c(parameters_col, grep("^g_[0123456789]", profiles_names))
       n_parameters[4] <- length(parameters_names) - n_parameters[3]
     }
@@ -233,7 +238,7 @@ if (model == "M") {
             rep(constraints_g[2], n_parameters[4]),
             rep(constraints_mix[2], n_parameters[5]))
         
-        theta_col <- c(grep("theta", parameters_names, value = T))
+        theta_col <- c(grep("theta", parameters_names, value = TRUE))
         constraints_up[1:(length(theta_col))] <- 
           qlogis(
             unlist(lapply(sim_profiles[sim, theta_col], function(x)
@@ -270,7 +275,7 @@ if (model == "M") {
         dat = sim_data[[1]][which(sim_data[[1]]$id == i), ],
         keys = sim_data[[2]],
         sim_profile = sim_profiles[sim,],
-        hessian = T,
+        hessian = TRUE,
         method = c("L-BFGS-B"),
         lower = constraints_low,
         upper = constraints_up,
@@ -309,7 +314,7 @@ if (model == "M") {
             dat = sim_data[[1]][which(sim_data[[1]]$id == fail_tmp[i]),], 
             keys = sim_data[[2]], 
             sim_profile = sim_profiles[sim, ],
-            hessian = T, 
+            hessian = TRUE, 
             method = c("L-BFGS-B"), 
             lower = constraints_low, 
             upper = constraints_up, 
@@ -368,6 +373,11 @@ if (model == "M") {
   # Complete simulation loop for the current distinct model 
   reps <- sim_profiles$reps[1]
   cat("\n Completed Simulation ", sim, "\n")
+  
+  # With random seed assigned, append current simulation data to list
+  if (any(profiles_names == "seed"))
+    sim_data_list <- c(sim_data_list, list(sim_data))
+  
   } # End of profile simulation loop
   
   ## ----- Output & Reports ---
@@ -378,13 +388,19 @@ if (model == "M") {
     write.csv(output_global, file = out_filename)
   )
   
+  # With random seed assigned, export simulation data
+  if (any(profiles_names == "seed"))
+    if (is.integer(sim_profiles$seed[1]) & sim_profiles$seed[1] > 0)
+      try(saveRDS(sim_data_list, file = paste0(in_filename, "_output", "_sim_data.Rdata"))
+      )
+  
   # Print reports on simulation speed and errors/warnings to the console
   elapsed <- unclass(Sys.time()) - t_start
   cat(round(elapsed / 60, 2),
       "m ",
       round(elapsed, 0),
       "s ",
-      round(elapsed / (reps * nrow(sim_profiles)), 2),
+      round(elapsed / (reps * dim(sim_profiles)[1]), 2),
       "s/rep \n")
   print.error.f(error_msg, converge_fail)
   
@@ -429,7 +445,7 @@ if (model == "M") {
   output_global <- data.frame(output_global)
   
   # Loop for sequentially executing simulations for distinct models on each row of 'sim_profiles'
-  for (sim in 1:nrow(sim_profiles)) { 
+  for (sim in 1:dim(sim_profiles)[1]) { 
     
     ## Define objects for simulation of the current distinct model
     
@@ -439,7 +455,7 @@ if (model == "M") {
     # Vectors 'parameters_names' and 'parameters_col' contain names and column #s of true parameter values in 'sim_profiles'
     
     parameters_col <- grep("b0|b1|psi|theta", profiles_names) 
-    parameters_names <- c( grep("b0|b1|psi|theta", parameters_names_global, value = T))
+    parameters_names <- c( grep("b0|b1|psi|theta", parameters_names_global, value = TRUE))
     
     # Add regression coefficients (b0 = intercept, b1 = slope) and logit parameters for classification probabilities (theta)
     n_parameters <-
@@ -450,7 +466,7 @@ if (model == "M") {
     
     # Add parameters for mean group size g
     if (any(sim_profiles[sim, grep("^g_[0123456789]", profiles_names)] > 1)) {
-      parameters_names <- c(parameters_names, grep("^g_[0123456789]", profiles_names, value = T))
+      parameters_names <- c(parameters_names, grep("^g_[0123456789]", profiles_names, value = TRUE))
       parameters_col <- c(parameters_col, grep("^g_[0123456789]", profiles_names))
       n_parameters[4] <- length(parameters_names) - sum(n_parameters[1:3])
     }
@@ -549,7 +565,7 @@ if (model == "M") {
             optimize.M.theta.p.f, gr = NULL, 
             dat = sim_data[[1]][which(sim_data[[1]]$id == i),], 
             sim_profile = sim_profiles[sim, ],
-            hessian = T, method = c("L-BFGS-B"), 
+            hessian = TRUE, method = c("L-BFGS-B"), 
             lower = constraints_low, 
             upper = constraints_up, 
             control = cont
@@ -562,7 +578,7 @@ if (model == "M") {
             dat = sim_data[[1]][which(sim_data[[1]]$id == i),], 
             keys = sim_data[[2]],
             sim_profile = sim_profiles[sim, ],
-            hessian = T, 
+            hessian = TRUE, 
             method = c("L-BFGS-B"), 
             lower = constraints_low, 
             control = cont
@@ -603,7 +619,7 @@ if (model == "M") {
                 gr = NULL, 
                 dat = sim_data[[1]][which(sim_data[[1]]$id == fail_tmp[i]),], 
                 sim_profile = sim_profiles[sim, ],
-                hessian = T, 
+                hessian = TRUE, 
                 method = c("L-BFGS-B"), 
                 lower = constraints_low, 
                 upper = constraints_up, 
@@ -617,7 +633,7 @@ if (model == "M") {
                 dat = sim_data[[1]][which(sim_data[[1]]$id == fail_tmp[i]),], 
                 keys = sim_data[[2]],
                 sim_profile = sim_profiles[sim, ],
-                hessian = T, 
+                hessian = TRUE, 
                 method = c("L-BFGS-B"), 
                 lower = constraints_low, 
                 upper = constraints_up, 
@@ -701,7 +717,7 @@ if (model == "M") {
         # Sample groups (with replacement) from simulated data to generate n (= n_bootstrap) re-samples of the simulated survey data
         tmp <-
           ldply(1:n_bootstrap, function(x)
-            sample_n(data.rep, size = sum(data.rep$count), replace = T, weight = count)) %>%
+            sample_n(data.rep, size = sum(data.rep$count), replace = TRUE, weight = count)) %>%
           select(., !any_of(remove_col)) %>%
           bind_cols(., id = rep(1:n_bootstrap, each = sum(data.rep$count)))
 
@@ -727,7 +743,7 @@ if (model == "M") {
                 gr = NULL,
                 dat = data.bootstrap[[1]][which(data.bootstrap[[1]]$id == i),],
                 sim_profile = sim_profiles[sim, ],
-                hessian = T, 
+                hessian = TRUE, 
                 method = c("L-BFGS-B"), 
                 lower = constraints_low, 
                 upper = constraints_up, 
@@ -742,7 +758,7 @@ if (model == "M") {
                 dat = data.bootstrap[[1]][which(data.bootstrap[[1]]$id == i),],
                 keys = data.bootstrap[[2]],
                 sim_profile = sim_profiles[sim, ],
-                hessian = T, 
+                hessian = TRUE, 
                 method = c("L-BFGS-B"), 
                 lower = constraints_low, 
                 upper = constraints_up, 
@@ -780,7 +796,7 @@ if (model == "M") {
             matrix(
               unlist(model_results_bootstrap$par),
               ncol = sum(n_parameters),
-              byrow = T
+              byrow = TRUE
             ),
             id = tmp_id_bootstrap
           )
@@ -806,7 +822,7 @@ if (model == "M") {
     tmp_theta_bootstrap <- tmp_theta_bootstrap[(which(!is.na(tmp_theta_bootstrap[, 1]))), ]
       
     ## Estimate standard errors, 95% confidence limits, and 95% confidence interval coverage for classification probabilities (theta) from bootstrapped estimates. Confidence limits are estimated using the bootstrap estimated SE and assuming the sampling distribution of logit scale parameters follows a normal distribution.
-    tmp.theta <- betas[which(betas[, ncol(betas)] == sim), -grep("^b[0123456789]_", colnames(betas))]
+    tmp.theta <- betas[which(betas[, dim(betas)[2]] == sim), -grep("^b[0123456789]_", colnames(betas))]
     output_bootstrap <- theta.bootstrap.f(sim_data, tmp.theta, tmp_theta_bootstrap, output_bootstrap)
     } # End of bootstrap loop
 
@@ -822,6 +838,11 @@ if (model == "M") {
       )
       t_loop <- unclass(Sys.time())
     }
+    
+    # With random seed assigned, append current simulation data to list
+    if (any(profiles_names == "seed"))
+      sim_data_list <- c(sim_data_list, list(sim_data))
+
   } # End of simulation loop
   
   # ----- Output & Reports ---
@@ -837,13 +858,19 @@ if (model == "M") {
   #   write.csv(betas, file = paste0(in_filename, "_out.betas.csv"))
   # )
     
+  # With random seed assigned, export simulation data
+  if (any(profiles_names == "seed"))
+    if (is.integer(sim_profiles$seed[1]) & sim_profiles$seed[1] > 0)
+      try(saveRDS(sim_data_list, file = paste0(in_filename, "_output", "_sim_data.Rdata"))
+      )
+  
   # Print reports on simulation speed and errors/warnings to the console
   elapsed <- unclass(Sys.time()) - t_start
   cat(round(elapsed / 60, 2),
       "m ",
       round(elapsed, 0),
       "s ",
-      round(elapsed / (reps * nrow(sim_profiles)), 2),
+      round(elapsed / (reps * dim(sim_profiles)[1]), 2),
       "s/rep \n")
   print.error.f(error_msg, converge_fail)
   
@@ -888,7 +915,7 @@ if (model == "M") {
   output_global <- data.frame(output_global)
 
   # Loop for sequentially executing simulations for distinct models on each row of 'sim_profiles'
-  for (sim in 1:nrow(sim_profiles)) { 
+  for (sim in 1:dim(sim_profiles)[1]) { 
     
     ## Define objects for simulation of the current distinct model
     
@@ -898,7 +925,7 @@ if (model == "M") {
     # Vectors 'parameters_names' and 'parameters_col' contain names and column #s of true parameter values in 'sim_profiles'
     
     parameters_col <- grep("b0|b1|psi|theta", profiles_names) # Column #s of parameters for estimating psi & theta
-    parameters_names <- c( grep("b0|b1|psi|theta", parameters_names_global, value = T))
+    parameters_names <- c( grep("b0|b1|psi|theta", parameters_names_global, value = TRUE))
     
     # Add regression coefficients (b0 = intercept, b1 = slope) and logit parameters for classification probabilities (theta) and true species probabilities (psi)
     n_parameters <-
@@ -909,7 +936,7 @@ if (model == "M") {
     
     # Add parameters for mean group size g
     if (any(sim_profiles[sim, grep("^g_[0123456789]", profiles_names)] > 1)) {
-      parameters_names <- c(parameters_names, grep("^g_[0123456789]", profiles_names, value = T))
+      parameters_names <- c(parameters_names, grep("^g_[0123456789]", profiles_names, value = TRUE))
       parameters_col <- c(parameters_col, grep("^g_[0123456789]", profiles_names))
       n_parameters[4] <- length(parameters_names) - sum(n_parameters[1:3])
     }
@@ -1014,7 +1041,7 @@ if (model == "M") {
             keys = sim_data[[2]],
             keys_psi = sim_data[[3]],
             sim_profile = sim_profiles[sim, ],
-            hessian = T, 
+            hessian = TRUE, 
             method = c("L-BFGS-B"), 
             lower = constraints_low, 
             upper = constraints_up, 
@@ -1028,7 +1055,7 @@ if (model == "M") {
               gr = NULL,
               dat = sim_data[[1]][which(sim_data[[1]]$id == i), ],
               sim_profile = sim_profiles[sim, ],
-              hessian = T, 
+              hessian = TRUE, 
               method = c("L-BFGS-B"), 
               lower = constraints_low, 
               control = cont
@@ -1071,7 +1098,7 @@ if (model == "M") {
                 keys = sim_data[[2]],
                 keys_psi = sim_data[[3]],
                 sim_profile = sim_profiles[sim, ],
-                hessian = T, 
+                hessian = TRUE, 
                 method = c("L-BFGS-B"), 
                 lower = constraints_low, 
                 upper = constraints_up, 
@@ -1084,7 +1111,7 @@ if (model == "M") {
                 gr = NULL, 
                 dat = sim_data[[1]][which(sim_data[[1]]$id == fail_tmp[i]),], 
                 sim_profile = sim_profiles[sim, ],
-                hessian = T, 
+                hessian = TRUE, 
                 method = c("L-BFGS-B"), 
                 lower = constraints_low, 
                 control = cont
@@ -1176,7 +1203,7 @@ if (model == "M") {
             sample_n(
               data.rep,
               size = sum(data.rep$count),
-              replace = T,
+              replace = TRUE,
               weight = count
             )) %>%
           select(., !any_of(remove_col)) %>%
@@ -1207,7 +1234,7 @@ if (model == "M") {
                 keys = data.bootstrap[[2]],
                 keys_psi = data.bootstrap[[3]],
                 sim_profile = sim_profiles[sim,],
-                hessian = T,
+                hessian = TRUE,
                 method = c("L-BFGS-B"),
                 lower = constraints_low,
                 upper = constraints_up,
@@ -1221,7 +1248,7 @@ if (model == "M") {
                 gr = NULL,
                 dat = data.bootstrap[[1]][which(data.bootstrap[[1]]$id == i), ],
                 sim_profile = sim_profiles[sim, ],
-                hessian = T, 
+                hessian = TRUE, 
                 method = c("L-BFGS-B"), 
                 lower = constraints_low, 
                 control = cont
@@ -1269,7 +1296,7 @@ if (model == "M") {
             matrix(
               unlist(model_results_bootstrap$par),
               ncol = sum(n_parameters),
-              byrow = T
+              byrow = TRUE
             ),
             id = tmp_id_bootstrap
           )
@@ -1314,7 +1341,7 @@ if (model == "M") {
       tmp_theta_bootstrap <- tmp_theta_bootstrap[(which(!is.na(tmp_theta_bootstrap[, 1]))), ]
         
       ## Estimate standard errors, 95% confidence limits, and 95% confidence interval coverage for true species probabilities (psi) from bootstrapped estimates. Confidence limits are estimated using the bootstrap estimated SE and assuming the sampling distribution of logit scale parameters follows a normal distribution.
-      tmp.psi <- betas[which(betas[, ncol(betas)] == sim)  ,  -grep("^b[0123456789]_", colnames(betas))]
+      tmp.psi <- betas[which(betas[, dim(betas)[2]] == sim)  ,  -grep("^b[0123456789]_", colnames(betas))]
       
       output_bootstrap <- psi.bootstrap.f(sim_data, tmp.psi, tmp_psi_bootstrap, tmp_theta_bootstrap, output_bootstrap)
       
@@ -1332,6 +1359,11 @@ if (model == "M") {
       )
       t_loop <- unclass(Sys.time())
     }
+    
+    # With random seed assigned, append current simulation data to list
+    if (any(profiles_names == "seed"))
+      sim_data_list <- c(sim_data_list, list(sim_data))
+
   } # End of loop for each profile simulation 
   
   # ----- Output & Reports ---
@@ -1347,13 +1379,18 @@ if (model == "M") {
   #   write.csv(betas, file = paste0(in_filename, "_out.betas.csv"))
   # )
 
+  # With random seed assigned, export simulation data
+  if (any(profiles_names == "seed"))
+    if (is.integer(sim_profiles$seed[1]) & sim_profiles$seed[1] > 0)
+      try(saveRDS(sim_data_list, file = paste0(in_filename, "_output", "_sim_data.Rdata")))
+  
   # Print reports on simulation speed and errors/warnings to the console
   elapsed <- unclass(Sys.time()) - t_start
   cat(round(elapsed / 60, 2),
       "m ",
       round(elapsed, 0),
       "s ",
-      round(elapsed / (reps * nrow(sim_profiles)), 2),
+      round(elapsed / (reps * dim(sim_profiles)[1]), 2),
       "s/rep \n")
   print.error.f(error_msg, converge_fail)
   
@@ -1420,11 +1457,11 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
   }
   
   # Vector 'parameter_names_het_global' contains parameters names across all simulations 
-  parameters_names_het_global <- c(grep("theta|psi", sim_profiles_het_names, value = T)) 
+  parameters_names_het_global <- c(grep("theta|psi", sim_profiles_het_names, value = TRUE)) 
   
   # Add parameters for group size (g) and heterogeneous group parameters (pi or rho) 
   if (any(sim_profiles_het[grep("^g_[0123456789]", sim_profiles_het_names)] > 1)) {
-    parameters_names_het_global <- c(parameters_names_het_global, grep("^g_[0123456789]", sim_profiles_het_names, value = T))}
+    parameters_names_het_global <- c(parameters_names_het_global, grep("^g_[0123456789]", sim_profiles_het_names, value = TRUE))}
   if (any(sim_profiles_het[, mix_col] > 0)) {
     parameters_names_het_global <- c(parameters_names_het_global, sim_profiles_het_names[mix_col])}
   
@@ -1445,21 +1482,21 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
   output_global <- data.frame(output_global)
   
   # Loop for sequentially executing simulations for distinct models on each row of 'sim_profiles'
-  for (sim in 1:nrow(sim_profiles)) { 
+  for (sim in 1:dim(sim_profiles)[1]) { 
     
     ## Define objects for simulation of the current distinct model
     
     O_ps <- c(sim_profiles$O_p[sim], sim_profiles$O_s[sim]) # Count of primary and secondary observers
     
     # Vector 'parameters_names' contains names of estimated parameters for the current simulation  
-    parameters_names <- c(grep("theta|psi", parameters_names_het_global, value = T))
+    parameters_names <- c(grep("theta|psi", parameters_names_het_global, value = TRUE))
 
     # Vector 'n_parameters_het' contains the number of estimated parameters for the current simulation in each of 5 categories: regression coefficient intercept and slope parameters (1 & 2), logit parameters (3), un-transformed parameters (4), and heterogeneous group probabilities (pi) parameters (5)
     n_parameters_het <- c(0, 0, length(grep("theta|psi", parameters_names)), 0, 0)
     
     # Add parameters for mean group size g
     if (any(sim_profiles[sim, group_size_col] > 1)) {
-      parameters_names <- c(parameters_names, grep("^g_[0123456789]", sim_profiles_het_names, value = T))
+      parameters_names <- c(parameters_names, grep("^g_[0123456789]", sim_profiles_het_names, value = TRUE))
       n_parameters_het[4] <- length(parameters_names) - sum(n_parameters_het[3])
     }
     
@@ -1503,13 +1540,13 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
       parameters_true <- c(
         unlist(sim_profiles[sim, c(grep("theta", profiles_names))]))
       
-      psi_betas_mat <- matrix(unlist(sim_profiles[sim, c(grep("_psi", profiles_names))]), ncol = 2, byrow = T) 
+      psi_betas_mat <- matrix(unlist(sim_profiles[sim, c(grep("_psi", profiles_names))]), ncol = 2, byrow = TRUE) 
       
       if (B == 2) {
         parameters_true <- c(parameters_true,
                       sim_data[[4]][[1]][1])
       }else{
-        psi_betas_mat <- matrix(unlist(sim_profiles[sim, c(grep("_psi", profiles_names))]), ncol = 2, byrow = T)
+        psi_betas_mat <- matrix(unlist(sim_profiles[sim, c(grep("_psi", profiles_names))]), ncol = 2, byrow = TRUE)
         parameters_true <- c(parameters_true,
                       sim_data[[4]][[1]][1:2])
       }
@@ -1561,13 +1598,13 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
         } else if (B == 3) {
           pairs <- matrix(c(
             1, 2, 1, 3, 2, 3
-          ), ncol = 2, byrow = T)
+          ), ncol = 2, byrow = TRUE)
           mix_abs <- vapply(1:3, function(x)
             tmp_mix[x] *
               (pmin(dist_psi_tru[, pairs[x, 1]], dist_psi_tru[, pairs[x, 2]])) ^ 2 *
               pmax(dist_psi_tru[, pairs[x, 1]], dist_psi_tru[, pairs[x, 2]]) /
               pmin(dist_psi_tru[, pairs[x, 1]], dist_psi_tru[, pairs[x, 2]])
-            , numeric(nrow(dist_psi_tru)))
+            , numeric(dim(dist_psi_tru)[1]))
           colnames(mix_abs) <- c("pi.12", "pi.13", "pi.23")
         }
         parameters_true <- c(
@@ -1624,7 +1661,7 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
           dat = sim_data[[1]][which(sim_data[[1]]$id == i),], 
           keys = sim_data[[2]], 
           sim_profile = sim_profiles_het[sim, ],
-          hessian = T, 
+          hessian = TRUE, 
           method = c("L-BFGS-B"), 
           lower = constraints_low, 
           upper = constraints_up, 
@@ -1663,7 +1700,7 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
                 dat = sim_data[[1]][which(sim_data[[1]]$id == fail_tmp[i]), ], 
                 keys = sim_data[[2]], 
                 sim_profile = sim_profiles_het[sim, ],
-                hessian = T, 
+                hessian = TRUE, 
                 method = c("L-BFGS-B"), 
                 lower = constraints_low, 
                 control = cont
@@ -1731,7 +1768,7 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
       "m ",
       round(elapsed, 0),
       "s ",
-      round(elapsed / (reps * nrow(sim_profiles)), 2),
+      round(elapsed / (reps * dim(sim_profiles)[1]), 2),
       "s/rep \n")
   print.error.f(error_msg, converge_fail)
 } 
@@ -1781,7 +1818,7 @@ if (model == "M") {
   parameters_names_global <- parameters_names_global_true[-c(grep("s2|s3|s4", parameters_names_global_true))]
   
   # Loop for sequentially executing simulations for distinct models on each row of 'sim_profiles'
-  for (sim in 1:nrow(sim_profiles)) {
+  for (sim in 1:dim(sim_profiles)[1]) {
 
     ## Define parameters for the current simulation
     O_ps <- c(sim_profiles$O_p[sim], sim_profiles$O_s[sim]) # Count of primary and secondary observers
@@ -1791,7 +1828,7 @@ if (model == "M") {
     
     # Vector 'n_parameters' contains the number of true parameters in each of 5 categories: regression coefficient intercept and slope parameters (1 & 2), logit parameters (3), untransformed parameters (4), and heterogeneous group probabilities (pi) parameters (5). Vector 'n_parameters_estimated' contains corresponding numbers for estimated parameters. 
     
-    parameters_names_true <- c(grep("psi|theta", parameters_names_global_true, value = T))
+    parameters_names_true <- c(grep("psi|theta", parameters_names_global_true, value = TRUE))
     parameters_col_true <- c(grep("psi|theta", names(sim_profiles[sim, ])))
     
     n_parameters <- c(0, 0, length(parameters_names_true), 0, 0)
@@ -1799,7 +1836,7 @@ if (model == "M") {
     # Add parameters for mean group size g
     if (any(sim_profiles[sim, grep("^g_", profiles_names)] > 1)) {
       parameters_names_true <-
-        c(parameters_names_true, grep("^g_", profiles_names, value = T))
+        c(parameters_names_true, grep("^g_", profiles_names, value = TRUE))
       parameters_col_true <-
         c(parameters_col_true, grep("^g_", profiles_names))
       n_parameters[4] <- length(parameters_names_true) - n_parameters[3]
@@ -1872,7 +1909,7 @@ if (model == "M") {
             dat = sim_data[[1]][which(sim_data[[1]]$id == i), ],
             keys = sim_data[[2]],
             sim_profile = sim_profiles_estimation[sim,],
-            hessian = T,
+            hessian = TRUE,
             method = c("L-BFGS-B"),
             lower = constraints_low,
             upper = constraints_up,
@@ -1915,7 +1952,7 @@ if (model == "M") {
                 dat = sim_data[[1]][which(sim_data[[1]]$id == fail_tmp[i]), ],
                 keys = sim_data[[2]],
                 sim_profile = sim_profiles_estimation[sim,],
-                hessian = T,
+                hessian = TRUE,
                 method = c("L-BFGS-B"),
                 lower = constraints_low,
                 control = cont
@@ -1990,25 +2027,35 @@ if (model == "M") {
     # Complete simulation loop
     reps <- sim_profiles$reps[1]
     cat("\n Completed Simulation ", sim, "\n")
+    
+    # With random seed assigned, append current simulation data to list
+    if (any(profiles_names == "seed"))
+      sim_data_list <- c(sim_data_list, list(sim_data))
+
   } # End of profile simulation loop
     
-    # ----- Output & Reports -----
-    
-    # Upon completing simulations, combine simulation inputs and outputs, and write 'output' as .csv file format text file to user-specified path
-    output_global <- bind_cols(sim_profiles, output_global)
-    try(
-      write.csv(output_global, file = out_filename)
-    )
-    
-    # Print reports on simulation speed and errors/warnings to the console
-    elapsed <- unclass(Sys.time()) - t_start
-    cat(round(elapsed / 60, 2),
-        "m ",
-        round(elapsed, 0),
-        "s ",
-        round(elapsed / (reps * nrow(sim_profiles)), 2),
-        "s/rep \n")
-    print.error.f(error_msg, converge_fail)
+  # ----- Output & Reports -----
+  
+  # Upon completing simulations, combine simulation inputs and outputs, and write 'output' as .csv file format text file to user-specified path
+  output_global <- bind_cols(sim_profiles, output_global)
+  try(write.csv(output_global, file = out_filename)
+      
+  )
+  
+  # With random seed assigned, export simulation data
+  if (any(profiles_names == "seed"))
+    if (is.integer(sim_profiles$seed[1]) & sim_profiles$seed[1] > 0)
+      try(saveRDS(sim_data_list, file = paste0(in_filename, "_output", "_sim_data.Rdata")))
+  
+  # Print reports on simulation speed and errors/warnings to the console
+  elapsed <- unclass(Sys.time()) - t_start
+  cat(round(elapsed / 60, 2),
+      "m ",
+      round(elapsed, 0),
+      "s ",
+      round(elapsed / (reps * dim(sim_profiles)[1]), 2),
+      "s/rep \n")
+  print.error.f(error_msg, converge_fail)
     
   } 
 
@@ -2047,7 +2094,7 @@ colnames(output_global) <- output_names_global
 output_global <- data.frame(output_global)
 
 # Loop for sequentially executing simulations for distinct models on each row of 'sim_profiles'
-for (sim in 1:nrow(sim_profiles)) {
+for (sim in 1:dim(sim_profiles)[1]) {
   
   # List 'sim_data' contains formatted simulated survey observations generated using the true model (including uncertain identification, heterogeneous groups)
   sim_data <- generate.simulation.data.f(sim_profiles[sim, ]) 
@@ -2138,7 +2185,7 @@ for (sim in 1:nrow(sim_profiles)) {
       aaply(
         matrix(
           vapply(1:rep.tru, function(x) summary(model_results[[x]])$coefficients, numeric(B - 1)),
-          ncol = (B - 1), byrow = T), 
+          ncol = (B - 1), byrow = TRUE), 
         1, 
         multinomial.inv.f
       )[, 1:(B - 1)], 
@@ -2156,7 +2203,7 @@ for (sim in 1:nrow(sim_profiles)) {
           function(x)
             diag(DeltaMethod(estimates.array[x, 1:(B - 1), 1], multinomial.inv.f, Hessian.mat[[x]], 0.00001)$variance) ^ 0.5, 
           numeric((B))
-        ))[ ,1:(B - 1), drop = F],
+        ))[ ,1:(B - 1), drop = FALSE],
         size.groups.SE
       )
     )
@@ -2174,14 +2221,14 @@ for (sim in 1:nrow(sim_profiles)) {
     # With groups = 1
     output <- 
       unlist(c(
-        colMeans(estimates.array[, , 1, drop = F]),
-        aaply(estimates.array[, , 1, drop = F], 2, sd),
-        colMeans(estimates.array[, , 2, drop = F]),
-        aaply(estimates.array[, , 1, drop = F], 2, sd) / colMeans(estimates.array[, , 1, drop = F]),
-        colMeans(estimates.array[, , 1, drop = F]) - parameters_true,
+        colMeans(estimates.array[, , 1, drop = FALSE]),
+        aaply(estimates.array[, , 1, drop = FALSE], 2, sd),
+        colMeans(estimates.array[, , 2, drop = FALSE]),
+        aaply(estimates.array[, , 1, drop = FALSE], 2, sd) / colMeans(estimates.array[, , 1, drop = FALSE]),
+        colMeans(estimates.array[, , 1, drop = FALSE]) - parameters_true,
         sum((estimates.array[, 1, 1] -
                unlist(parameters_true)) ^ 2) / (rep.tru - 1),
-        sum(ci.cov, na.rm = T) / rep.tru,
+        sum(ci.cov, na.rm = TRUE) / rep.tru,
         rep.tru))
   }else{
     # Group size >= 1
@@ -2195,10 +2242,10 @@ for (sim in 1:nrow(sim_profiles)) {
         colSums((estimates.array[, , 1] -
                    matrix(
                      unlist(parameters_true),
-                     byrow = T,
+                     byrow = TRUE,
                      nrow = rep.tru,
                      ncol = length(parameters_true))) ^ 2) / (rep.tru - 1), 
-        aaply(ci.cov, 2, function(x) sum(x, na.rm = T) / rep.tru),
+        aaply(ci.cov, 2, function(x) sum(x, na.rm = TRUE) / rep.tru),
         rep.tru))
   } # End of summary loop
   

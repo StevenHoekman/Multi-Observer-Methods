@@ -1,5 +1,5 @@
 # Supplemental_functions.R
-# Supplemental functions for analyses and summaries, version 1.1.1
+# Supplemental functions for analyses and summaries, version 1.1.2
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code with supplemental functions for simulation analyses for estimating uncertain identification using multi-observer methods. These functions provide supplemental services such as: drawing random samples from probability distributions; computing probabilities and other values used in likelihood computations; and generating, formatting, summarizing, and error-checking simulation data and statistical output. Functions are grouped according by purpose. Comments with each function describe its purpose, inputs and outputs, and functioning of the code. Code developed and tested in R version 4.1.
@@ -18,9 +18,9 @@ multinomial.f <- function(p) {
 # Function: {multinomial.inv.f} Inverse multinomial function. Accepts matrix of sets of multinomial beta parameters (rows), returns matrix of multinomial probabilities.
 
 multinomial.inv.f <- function(betas) {
-  denom <- aaply(betas, 1, function(x) exp(x)) 
+  denom <- sapply(betas, function(x) exp(x)) 
   denom <- 1 + sum(denom)
-  est <- aaply(betas, 1, function(x) exp(x) / denom)
+  est <- sapply(betas, function(x) exp(x) / denom)
   est <- c(est, 1 - sum(est))
 }
 
@@ -56,7 +56,7 @@ logistic.dist.f <- function(beta) {
 mlogit.dist.f <- function(beta) {
   # Convert vectors containing a set of regression coefficients to matrix with 1 row
   if (is.vector(beta)) {
-    beta <- matrix(beta, ncol = 2, byrow = T)
+    beta <- matrix(beta, ncol = 2, byrow = TRUE)
   }
   r <- rnorm(10^7.3)
   d <- (1 + colSums(t(apply(beta, 1, function(x) exp(x[1] + x[2] * r)))))
@@ -70,7 +70,7 @@ mlogit.dist.f <- function(beta) {
 mlogit.regress.predict.f <- function(r, beta, n) {
   # Make beta vectors into matrices
   if (is.vector(beta)) {
-    beta <- matrix(beta, ncol = 2, byrow = T)
+    beta <- matrix(beta, ncol = 2, byrow = TRUE)
   }
   distribution <- matrix(0, length(r), n)
   denom <- matrix(0, n, length(r))
@@ -136,7 +136,7 @@ group.observed.cprobability.homogeneous.f <- function(d, p, states, s){
 
 multinom.likelihood.f <- function(dat) {
   dat <- matrix(dat, nrow = 1)
-  multinom(dat ~ 1, Hess = T, trace = F)
+  multinom(dat ~ 1, Hess = TRUE, trace = FALSE)
 }
 
 # Function: {probability.key.f} Retrieves probabilities for heterogeneous observed groups from a keyed table. Accepts inputs of 'd' (group size and key value for an observed group), an index 'o' to the observer (1 to the total # of observers), the 'n.group' table, and a keyed table for unique observed groups 'prob.key'. Returns a vector (length of possible combinations of true groups) with corresponding probabilities of the observed group (or for missing data, probabilities = 1).
@@ -176,7 +176,7 @@ psi.table.f <- function(g, psi){
 
 group.true.probability.key.f <- function(group_probability, size_probability, size){
 
-  if (!exists("B")) B <- ncol(size_probability)
+  if (!exists("B")) B <- dim(size_probability)[2]
   
   if (B == 2) {
     # True species states B = 2
@@ -211,7 +211,7 @@ group.true.probability.key.f <- function(group_probability, size_probability, si
     counts <- lapply(true.states, function(x)
       vapply(1:B, function(y)
         apply(x, 1, function(z)
-          sum(z == y)), integer(nrow(x))))
+          sum(z == y)), integer(dim(x)[1])))
     
     # Counts of each species in each true group
     labels.spp <- NULL
@@ -233,7 +233,7 @@ group.true.probability.key.f <- function(group_probability, size_probability, si
     
     # Insert into matrices probability of groups of specified sizes for each species. Groups of size  = max(size) + 1 (representing groups of 0) get probability = 1 so these don't contribute to probabilities. 
     prob.mat <- lapply(counts, function(y)
-      vapply(1:B, function(z) size_probability[y[, z] , z], numeric(nrow(y)))
+      vapply(1:B, function(z) size_probability[y[, z] , z], numeric(dim(y)[1]))
     )
 
     # Use 'index.group' to append group probabilities for each possible true group
@@ -286,7 +286,7 @@ group.true.probability.f <- function(group_probability, size_probability, size){
     counts <- 
       vapply(1:B, function(y)
         apply(true_states, 1, function(z)
-          sum(z == y)), integer(nrow(true_states)))
+          sum(z == y)), integer(dim(true_states)[1]))
     
     # Counts of each species in each true group
     spp_labels <- apply(counts, 1, function(x) paste0(x, collapse = ""))
@@ -298,11 +298,11 @@ group.true.probability.f <- function(group_probability, size_probability, size){
       
     # Index locations in each matrix with value = 0, replace 0's with value = max(group size) + 1
     counts_z <- which(counts == 0)
-    counts[counts_z] <- nrow(size_probability)
+    counts[counts_z] <- dim(size_probability)[1]
 
     # Insert into matrices probability of groups of specified sizes for each species. Groups of size  = max(size) + 1 (representing groups of 0) get probability = 1 so these don't contribute to probabilities.
     probability_mat <- 
-      vapply(1:B, function(z) size_probability[counts[, z] , z], numeric(nrow(counts)))
+      vapply(1:B, function(z) size_probability[counts[, z] , z], numeric(dim(counts)[1]))
 
     # Use 'index.group' to append group probabilities for each possible true group
       probability_mat <- 
@@ -361,7 +361,7 @@ group.probability.constant.f <- function(p, m, g) {
       
       # Compute sum of heterogeneous group probabilities 'epsilon' and sums of heterogeneous group probabilities for each species 'spp_sum', which is equivalent to the summation term for pi[bx] in the companion article
       epsilon <- sum(m)
-      pairs <- matrix(c(1, 2, 1, 3, 2, 3), ncol = 2, byrow = T)
+      pairs <- matrix(c(1, 2, 1, 3, 2, 3), ncol = 2, byrow = TRUE)
       spp_sum <- vapply(1:3, function(x)
         sum(m[pairs[x, ]]), numeric(1))
       
@@ -424,10 +424,10 @@ group.probability.psi.constant.f <- function(p, m, g) {
         negative_values <- which(pi < 0)
         cat("Warning: Mixing probability of ", m," reduced because", length(negative_values), "probabilities of Psi for individual groups were <0", "\n")
         pen <- pen + (1 + -sum(pi[negative_values]) * 10) ^ 2
-        negative_rows <- negative_values %% nrow(pi)
-        negative_rows[which(negative_rows == 0)] <- nrow(pi)
-        p[negative_rows, ncol(pi)] <- 
-          p[negative_rows, ncol(pi)] + pi[negative_values]
+        negative_rows <- negative_values %% dim(pi)[1]
+        negative_rows[which(negative_rows == 0)] <- dim(pi)[1]
+        p[negative_rows, dim(pi)[2]] <- 
+          p[negative_rows, dim(pi)[2]] + pi[negative_values]
         pi[negative_values] <- 0
       }
     } else if (B == 3) {
@@ -435,13 +435,13 @@ group.probability.psi.constant.f <- function(p, m, g) {
       
       # Compute sum of heterogeneous group probabilities 'epsilon' and sums of heterogeneous group probabilities for each species 'spp_sum', which is equivalent to the summation term for pi[bx] in the companion article
       epsilon <- sum(m)
-      pairs <- matrix(c(1, 2, 1, 3, 2, 3), ncol = 2, byrow = T)
+      pairs <- matrix(c(1, 2, 1, 3, 2, 3), ncol = 2, byrow = TRUE)
       spp_sum <-
         matrix(vapply(1:3, function(x)
           sum(m[pairs[x,]]), numeric(1)),
           ncol = 3,
-          nrow = nrow(delta),
-          byrow = T)
+          nrow = dim(delta)[1],
+          byrow = TRUE)
       
       # For each species, test if summed heterogeneous group probabilities for a species 'spp.sum' exceeds 'delta' (i.e, heterogeneous group probabilities for a species exceed overall group probability for that species). If so, reduce heterogeneous groups and compute penalty term for -log(likelihood).
 
@@ -450,7 +450,7 @@ group.probability.psi.constant.f <- function(p, m, g) {
         xit <- 1
         repeat {
           diff_max <- which.min(test)
-          diff_max_col <- (diff_max %% nrow(test)) + 1
+          diff_max_col <- (diff_max %% dim(test)[1]) + 1
           r <- (sum(m[pairs[diff_max_col, ]]) - (-test[diff_max] + 0.02)) / sum(m[pairs[diff_max_col, ]])
           m[pairs[diff_max_col, ]] <- m[pairs[diff_max_col, ]] * max(r, 0)
           
@@ -459,8 +459,8 @@ group.probability.psi.constant.f <- function(p, m, g) {
             matrix(vapply(1:3, function(x)
               sum(m[pairs[x,]]), numeric(1)),
               ncol = 3,
-              nrow = nrow(delta),
-              byrow = T)
+              nrow = dim(delta)[1],
+              byrow = TRUE)
           test <- delta - spp_sum / (1 + epsilon)
           if (all(test > 0)) break
           xit <- xit + 1
@@ -473,8 +473,8 @@ group.probability.psi.constant.f <- function(p, m, g) {
         matrix(
           m,
           ncol = 3,
-          nrow = nrow(delta),
-          byrow = T))
+          nrow = dim(delta)[1],
+          byrow = TRUE))
     }
   }
   return(list(pi, m, pen))
@@ -522,25 +522,25 @@ group.probability.psi.encounter.f <- function(p, m, g) {
       # True species states = 3
       
       # For all groups (prior to mixing), compute matrix of group probabilities 'zeta' for homogeneous groups of each species (cols 1-3; pi.1, pi.2, pi.3) and for heterogeneous groups (cols 4-6; pi.12, pi.13, pi.23) given true species probabilities for each unique observation record (rows)
-      zeta <- matrix(0, nrow(delta), B + choose(B, 2))
+      zeta <- matrix(0, dim(delta)[1], B + choose(B, 2))
       pairs <- matrix(c(
         1, 2, 1, 3, 2, 3
-      ), ncol = 2, byrow = T)
+      ), ncol = 2, byrow = TRUE)
       
       zeta[, 4:6] <- vapply(1:3, function(x)
         m[x] * delta[, pairs[x, 1]] * delta[, pairs[x, 2]]
-        , numeric(nrow(zeta)))
+        , numeric(dim(zeta)[1]))
       
       zeta[, 1:3] <- vapply(1:3, function(x)
         delta[, x] -
           rowSums(zeta[, B + pairs[x, ]])
-        , numeric(nrow(zeta)))
+        , numeric(dim(zeta)[1]))
       
       # Calculate group probabilities (pi) for each species (pi.1, pi.2, pi.3) and heterogeneous groups (p.12, pi.13, pi.23) for each unique observation record
       pi <- zeta / (1 - rowSums(zeta[, 4:6]))
 
       # epsilon <- sum(m)
-      # pairs <- matrix(c(1, 2, 1, 3, 2, 3), ncol = 2, byrow = T)
+      # pairs <- matrix(c(1, 2, 1, 3, 2, 3), ncol = 2, byrow = TRUE)
       # spp.sum <- vapply(1:3, function(x)
       #   sum(m[pairs[x, ]]), numeric(1))
       # 
@@ -601,9 +601,9 @@ theta.calc.f <- function(B.max, B , A) {
   function(obs, mat) {
     theta <- matrix(0, B, A)
     # Add correct classification probabilities
-    theta[int.mat[[1]][1:B, ]] <- 1 - colSums(mat[, , obs, drop = F])
+    theta[int.mat[[1]][1:B, ]] <- 1 - colSums(mat[, , obs, drop = FALSE])
     # Add uncertain identification probabilities
-    theta[int.mat[[B + (B.max - 1) * (A - B)]]] <- mat[, , obs, drop = F] 
+    theta[int.mat[[B + (B.max - 1) * (A - B)]]] <- mat[, , obs, drop = FALSE] 
     theta    
   }
 }
@@ -612,7 +612,7 @@ theta.calc.f <- function(B.max, B , A) {
 
 generate.sim.profiles.f <- function(const, var) {
   tmp <- as_tibble(const[1:length(const)])
-  tmp[1:nrow(var), ] <- const
+  tmp[1:dim(var)[1], ] <- const
   tmp <- bind_cols(tmp, var)
 } 
 
@@ -686,7 +686,7 @@ generate.ini.f <- function(profiles, par) {
   # Heterogeneous group parameters
   if (any(mix > 0)) {
     par_ini[, (sum(par[1:4]) + 1):sum(par[1:5])] <- 
-      matrix(c(-4.5, -3.5, -4, -5, -3), nrow = 5, ncol = length(mix), byrow = T)
+      matrix(c(-4.5, -3.5, -4, -5, -3), nrow = 5, ncol = length(mix), byrow = TRUE)
   }
   par_ini
 }
@@ -705,7 +705,7 @@ format.MOM.data.f <- function(data.obs, A, O_ps, mix, n_bins) {
   
     var.sort <- c("id",
                   "group_size",
-                  grep("y_p", var.name, value = T))
+                  grep("y_p", var.name, value = TRUE))
     var.sort <- syms(var.sort)
     var.sort.2 <- quo(desc(count))
   
@@ -749,7 +749,7 @@ format.MOM.data.f <- function(data.obs, A, O_ps, mix, n_bins) {
         as.integer(factorial(x[A + 1] + B - 1) / prod(factorial(x[A + 1]), factorial(B - 1))))) %>% 
       bind_cols(tmp[[2]], .)
   }else{
-    tmp[[2]] <- bind_cols(tmp[[2]], data.frame(B_states = rep(B, nrow(tmp[[2]]))))
+    tmp[[2]] <- bind_cols(tmp[[2]], data.frame(B_states = rep(B, dim(tmp[[2]])[1])))
   }
 
   # Add total count of classifications for each keyed observed group
@@ -762,7 +762,7 @@ format.MOM.data.f <- function(data.obs, A, O_ps, mix, n_bins) {
       ungroup(.) %>%
       arrange(., covariate_psi)
 
-    unique.cov.psi <-  bind_cols(unique.cov.psi, tibble(psi_key = 1:nrow(unique.cov.psi)))
+    unique.cov.psi <-  bind_cols(unique.cov.psi, tibble(psi_key = 1:dim(unique.cov.psi)[1]))
     
     tmp[[1]] <- left_join(tmp[[1]], unique.cov.psi, by = c("covariate_psi")) 
 
@@ -780,12 +780,12 @@ generate.keys.f <- function(dat, obs, A) {
   col.n <- names(d)
   
   # Matrix 'col' gives column numbers for classifications of each observer (row)
-  col <- laply(1:obs, function(x)
-    ((x - 1) * A + 1):(x * A))
+  col <- t(sapply(1:obs, function(x)
+    ((x - 1) * A + 1):(x * A)))
   names(d) <- c(rep(paste0("V", 1:A), obs))
-
+  
   # Combine all observed groups A columns, adding one observed group with missing data
-  l <- bind_rows(llply(1:obs, function(x)
+  l <- bind_rows(lapply(1:obs, function(x)
     d[, col[x, ]]), as.data.frame(matrix(0L, ncol = A)))
   
   # 'unique.key' = Unique observed groups, with missing data getting key = 1
@@ -793,21 +793,21 @@ generate.keys.f <- function(dat, obs, A) {
     distinct_all(l) %>% 
     arrange_all(.)
   
-  unique.key <- bind_cols(unique.key, tibble(key = 1:nrow(unique.key)))
+  unique.key <- bind_cols(unique.key, tibble(key = 1:dim(unique.key)[1]))
   
   # Data frame 'out' contains unique key values for unique observed groups within each simulation replicate (indexed by 'id') with columns labeled for each observer
   
   out <-
     do.call(cbind, lapply(1:obs, function(x)
       left_join(d[, c(col[x,])], unique.key, by = c(paste0("V", 1:A))) %>%
-        select(., key)))
+        select(., key))) 
   
   key.n <-
-    laply(strsplit(col.n[col[, 1]], "[.]"), function(x)
+    sapply(strsplit(col.n[col[, 1]], "[.]"), function(x)
       paste0(substr(x[1], 1, nchar(x[1]) - 2), "_key"))
   names(out) <- key.n
-  names(unique.key) <- c(paste0('A_', 1:(ncol(unique.key) - 1)), "key")
-
+  names(unique.key) <- c(paste0('A_', 1:(dim(unique.key)[2] - 1)), "key")
+  
   return(list(out, unique.key))
 }
 
@@ -821,13 +821,13 @@ generate.keys.theta.f <- function(dat, obs, A) {
   col.n <- names(d)
   
   # Matrix 'col' gives column numbers for classifications of each observer (row)
-  col <- laply(1:obs, function(x)
-    ((x - 1) * A + 1):(x * A))
+  col <- t(sapply(1:obs, function(x)
+    ((x - 1) * A + 1):(x * A)))
   names(d) <- c(rep(paste0("V", 1:A), obs), "covariate_theta")
-  col.cov <- ncol(d)
+  col.cov <- dim(d)[2]
 
   # Combine observed groups for all observers in A columns, with an additional column for covariate values. Add one group observation with missing data.
-  l <- bind_rows(llply(1:obs, function(x)
+  l <- bind_rows(lapply(1:obs, function(x)
     d[, c(col[x, ], col.cov)]), as.data.frame(matrix(0L, ncol = A)))
   
   # unique.key = Unique combinations of observed groups and covariate values. Missing observations get keys = 1 to (# of covariate bins).
@@ -835,20 +835,19 @@ generate.keys.theta.f <- function(dat, obs, A) {
     distinct_all(l, ) %>%
     arrange_all(., )
   
-  unique.key <- bind_cols(unique.key, tibble(key = 1:nrow(unique.key)))
+  unique.key <- bind_cols(unique.key, tibble(key = 1:dim(unique.key)[1]))
   
   # Data frame 'out' contains unique key values for unique combinations of observed groups and covariate values, with columns labeled for each observer
-  
   out <-
     do.call(cbind, lapply(1:obs, function(x)
       left_join(d[, c(col[x, ], col.cov)], unique.key, by = c(paste0("V", 1:A), "covariate_theta")) %>% 
         select(., key)))
   
   key.n <-
-    laply(strsplit(col.n[col[, 1]], "[.]"), function(x)
+    sapply(strsplit(col.n[col[, 1]], "[.]"), function(x)
       paste0(substr(x[1], 1, nchar(x[1]) - 2), "_key"))
   names(out) <- key.n
-  names(unique.key) <- c(paste0('A_', 1:(ncol(unique.key) - 2)), "covariate_theta", "key")
+  names(unique.key) <- c(paste0('A_', 1:(dim(unique.key)[2] - 2)), "covariate_theta", "key")
   
   return(list(out, unique.key))
 }
@@ -881,7 +880,7 @@ model.results.f <- function(results, par.t, r, n) {
   
   # Insert standard errors of multinomial logit parameters 
   if (sum(n[c(3, 5)]) > 0) {
-    for (i in 1:nrow(out)) {
+    for (i in 1:dim(out)[1]) {
       out$se[[i]][logit.col] <- out$se.logit[[i]][logit.col]
     }
   }
@@ -895,9 +894,9 @@ model.results.f <- function(results, par.t, r, n) {
     do(ci.cov = .$l * .$u) %>% 
     bind_cols(out[, "par"], out[, "se"], .) %>% 
     ungroup() %>%
-    do(par = (matrix(  unlist(.$par), nrow = r , byrow = T  )),
-       se = (matrix(  unlist(.$se), nrow = r , byrow = T  )  ),
-       ci.cov = (matrix(unlist(.$ci.cov), nrow = r, byrow = T ) )
+    do(par = (matrix(  unlist(.$par), nrow = r , byrow = TRUE  )),
+       se = (matrix(  unlist(.$se), nrow = r , byrow = TRUE  )  ),
+       ci.cov = (matrix(unlist(.$ci.cov), nrow = r, byrow = TRUE ) )
        )
   
   # Apply inverse logit transform to multinomial logit parameters
@@ -936,7 +935,7 @@ model.results.het.s.f <- function(results, par.t, r, n, n.est, par.d) {
   
   # Insert standard errors of multinomial logit parameters 
   if (sum(n[c(3, 5)]) > 0) {
-    for (i in 1:nrow(out)) {
+    for (i in 1:dim(out)[1]) {
       out$se[[i]][logit.col.est] <- out$se.logit[[i]][logit.col.est]
     }
   }
@@ -945,7 +944,7 @@ model.results.het.s.f <- function(results, par.t, r, n, n.est, par.d) {
   col <- c(1:par.d[3], 
            rep.int(par.d[2]:par.d[3], par.d[1]),
            (par.d[3] + 1):sum(n.est))
-  for (i in 1:nrow(out)) {
+  for (i in 1:dim(out)[1]) {
     out$par[[i]] <- out$par[[i]][col]
     out$var[[i]] <- out$var[[i]][col]
     out$se[[i]] <- out$se[[i]][col]
@@ -962,9 +961,9 @@ model.results.het.s.f <- function(results, par.t, r, n, n.est, par.d) {
     do(ci.cov = .$l * .$u) %>% 
     bind_cols(out[, "par"], out[, "se"], .) %>% 
     ungroup() %>%
-    do(par = (matrix(  unlist(.$par), nrow = r , byrow = T  )),
-       se = (matrix(  unlist(.$se), nrow = r , byrow = T  )  ),
-       ci.cov = (matrix(unlist(.$ci.cov), nrow = r, byrow = T ) )
+    do(par = (matrix(  unlist(.$par), nrow = r , byrow = TRUE  )),
+       se = (matrix(  unlist(.$se), nrow = r , byrow = TRUE  )  ),
+       ci.cov = (matrix(unlist(.$ci.cov), nrow = r, byrow = TRUE ) )
     )
   
   # Apply inverse logit transform to multinomial logit parameters
@@ -983,11 +982,11 @@ summarise.results.f <- function(parameters, par.t, r){
   summary <-
     parameters %>%
     do(
-      mean = colMeans(parameters$par[[1]], na.rm = T),
-      sd = aaply(parameters$par[[1]], 2, sd, na.rm = T),
-      se = colMeans(parameters$se[[1]], na.rm = T),
+      mean = colMeans(parameters$par[[1]], na.rm = TRUE),
+      sd = aaply(parameters$par[[1]], 2, sd, na.rm = TRUE),
+      se = colMeans(parameters$se[[1]], na.rm = TRUE),
       ci.cov = aaply(parameters$ci.cov[[1]], 2, function(x) 
-        sum(x, na.rm = T) / length(which(x < 2)))
+        sum(x, na.rm = TRUE) / length(which(x < 2)))
     )
   
   # Add mean error, root mean square error 
@@ -1000,7 +999,7 @@ summarise.results.f <- function(parameters, par.t, r){
       summary$sd[[1]] / summary$mean[[1]],
       summary$mean[[1]] -  par.t,
       colSums((as.matrix(parameters$par[[1]]) -  
-                 matrix(unlist(par.t), byrow = T, nrow = r, ncol = length(par.t))) ^ 2) / (r - 1),
+                 matrix(unlist(par.t), byrow = TRUE, nrow = r, ncol = length(par.t))) ^ 2) / (r - 1),
       summary$ci.cov,
       r
     )
@@ -1169,21 +1168,21 @@ psi.est.f <- function(par, dat, n_parameters) {
       )
       
       # Calculate matrix of probabilities 'zeta' of homogeneous groups of each species (cols 1-3) and heterogeneous groups (cols 4-6) given delta for each unique observation history (rows)
-      zeta <- matrix(0, nrow(delta), B + choose(B, 2))
+      zeta <- matrix(0, dim(delta)[1], B + choose(B, 2))
       pairs <- matrix(c(1, 2, 1, 3, 2, 3), 
                       ncol = 2, 
-                      byrow = T)
+                      byrow = TRUE)
       
       zeta[, 4:6] <- vapply(1:3, function(x)
         par[c(x + sum(n_parameters[1:4]))] *
           (pmin(delta[, pairs[x, 1]], delta[, pairs[x, 2]])) ^ 2 *
           pmax(delta[, pairs[x, 1]], delta[, pairs[x, 2]]) /
           pmin(delta[, pairs[x, 1]], delta[, pairs[x, 2]])
-        , numeric(nrow(zeta)))
+        , numeric(dim(zeta)[1]))
       zeta[, 1:3] <- vapply(1:3, function(x)
         delta[, x] -
           rowSums(zeta[, B + pairs[x, ]])
-        , numeric(nrow(zeta)))
+        , numeric(dim(zeta)[1]))
       
       # Calculate group probabilities (pi) for homogeneous and heterogeneous groups for each unique observation history
       psi.mean <- zeta / (1 - rowSums(zeta[, 4:6]))
@@ -1493,10 +1492,10 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
   tmp.id <- unique(sim.data.tmp$id)
   n.sim <- rep(sim, reps)
   tmp.betas.psi <- cbind(parameter.output$par[[1]][, c(grep("psi", parameters_names))])
-  colnames(tmp.betas.psi) <- c(grep("psi", parameters_names, value = T))
+  colnames(tmp.betas.psi) <- c(grep("psi", parameters_names, value = TRUE))
   if (sim_profiles$Model[1] == "M.theta.psi" & B == 2 & A == 2 | sim_profiles$Model[1] == "M.theta+psi" & B == 2 & A == 2) {
     tmp.betas.theta <- cbind(parameter.output$par[[1]][, c(grep("b0...[^p]|b1...[^p]", parameters_names))])
-    colnames(tmp.betas.theta) <- c(grep("b0...[^p]|b1...[^p]", parameters_names, value = T))
+    colnames(tmp.betas.theta) <- c(grep("b0...[^p]|b1...[^p]", parameters_names, value = TRUE))
   }
 
     if (B == 2) {
@@ -1663,17 +1662,17 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
                       me.theta.s.21 = mean(theta.s.21.err),
                       me.theta.s.12 = mean(theta.s.12.err),
                       
-                      rm.psi.1 = (sum(psi.1.err ^ 2) / (nrow(tmp.psi - 1))) ^ 0.5,
-                      rm.theta.p.21 = (sum(theta.p.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                      rm.theta.p.12 = (sum(theta.p.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                      rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                      rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
+                      rm.psi.1 = (sum(psi.1.err ^ 2) / (dim(tmp.psi)[1] - 1)) ^ 0.5,
+                      rm.theta.p.21 = (sum(theta.p.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                      rm.theta.p.12 = (sum(theta.p.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                      rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                      rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
                       
                       ci.lg.psi.1 = mean(ci.lg.psi.1),
-                      ci.lg.theta.p.21 = mean(ci.lg.theta.p.21, na.rm = T),
-                      ci.lg.theta.p.12 = mean(ci.lg.theta.p.12, na.rm = T),  
-                      ci.lg.theta.s.21 = mean(ci.lg.theta.s.21, na.rm = T),
-                      ci.lg.theta.s.12 = mean(ci.lg.theta.s.12, na.rm = T)
+                      ci.lg.theta.p.21 = mean(ci.lg.theta.p.21, na.rm = TRUE),
+                      ci.lg.theta.p.12 = mean(ci.lg.theta.p.12, na.rm = TRUE),  
+                      ci.lg.theta.s.21 = mean(ci.lg.theta.s.21, na.rm = TRUE),
+                      ci.lg.theta.s.12 = mean(ci.lg.theta.s.12, na.rm = TRUE)
             ) %>%
             bind_rows(output.betas, .)
           
@@ -1728,9 +1727,9 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
                       me.theta.s.21 = mean(theta.s.21.err),
                       me.theta.s.12 = mean(theta.s.12.err),
                       
-                      rm.psi.1 = (sum(psi.1.err ^ 2) / (nrow(tmp.psi - 1))) ^ 0.5,
-                      rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                      rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
+                      rm.psi.1 = (sum(psi.1.err ^ 2) / (dim(tmp.psi)[1] - 1)) ^ 0.5,
+                      rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                      rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
                       
                       ci.lg.psi.1 = mean(ci.lg.psi.1),
                       ci.lg.theta.s.21 = mean(ci.lg.theta.s.21),
@@ -1770,8 +1769,8 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
                  psi.1.err = psi.1 - sim.data[[4]][[1]][[1]]) %>%
           summarise(., 
                     me.psi.1 = mean(psi.1.err), 
-                    rm.psi.1 = (sum(psi.1.err ^ 2) / (nrow(tmp.psi - 1))) ^ 0.5,
-                    ci.lg.psi.1 = mean(ci.lg.psi.1, na.rm = T)
+                    rm.psi.1 = (sum(psi.1.err ^ 2) / (dim(tmp.psi)[1] - 1)) ^ 0.5,
+                    ci.lg.psi.1 = mean(ci.lg.psi.1, na.rm = TRUE)
           ) %>%
           # bind_cols(., summarise_all(psi.group, mean)) %>%
           bind_rows(output.betas, .)
@@ -1854,12 +1853,12 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
                   me.psi.1 = mean(psi.1.err), 
                   me.psi.2 = mean(psi.2.err),
                   me.psi.3 = mean(psi.3.err),
-                  rm.psi.1 = (sum(psi.1.err ^ 2) / (nrow(tmp.psi - 1))) ^ 0.5,
-                  rm.psi.2 = (sum(psi.2.err ^ 2) / (nrow(tmp.psi - 1))) ^ 0.5,
-                  rm.psi.3 = (sum(psi.3.err ^ 2) / (nrow(tmp.psi - 1))) ^ 0.5,
-                  ci.lg.psi.1 = mean(ci.lg.psi.1, na.rm = T),
-                  ci.lg.psi.2 = mean(ci.lg.psi.2, na.rm = T),
-                  ci.lg.psi.3 = mean(ci.lg.psi.3, na.rm = T)
+                  rm.psi.1 = (sum(psi.1.err ^ 2) / (dim(tmp.psi)[1] - 1)) ^ 0.5,
+                  rm.psi.2 = (sum(psi.2.err ^ 2) / (dim(tmp.psi)[1] - 1)) ^ 0.5,
+                  rm.psi.3 = (sum(psi.3.err ^ 2) / (dim(tmp.psi)[1] - 1)) ^ 0.5,
+                  ci.lg.psi.1 = mean(ci.lg.psi.1, na.rm = TRUE),
+                  ci.lg.psi.2 = mean(ci.lg.psi.2, na.rm = TRUE),
+                  ci.lg.psi.3 = mean(ci.lg.psi.3, na.rm = TRUE)
         ) %>%
         bind_rows(output.betas, .)
       
@@ -1895,7 +1894,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
   tmp.id <- unique(sim.data.tmp$id)
   n.sim <- rep(sim, reps)
   tmp.betas <- cbind(parameter.output$par[[1]][, c(grep("b0|b1", parameters_names))])
-  colnames(tmp.betas) <- c(grep("b0|b1", parameters_names, value = T))
+  colnames(tmp.betas) <- c(grep("b0|b1", parameters_names, value = TRUE))
 
   # Estimate overall mean classification probabilities (psi) and associated SEs (using Delta Method)
   tmp.theta <- 
@@ -1988,15 +1987,15 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                     me.theta.s.21 = mean(theta.s.21.err),
                     me.theta.s.12 = mean(theta.s.12.err),
                     
-                    rm.theta.p.21 = (sum(theta.p.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.p.12 = (sum(theta.p.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
+                    rm.theta.p.21 = (sum(theta.p.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.p.12 = (sum(theta.p.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
                     
-                    ci.lg.theta.p.21 = mean(ci.lg.theta.p.21, na.rm = T),
-                    ci.lg.theta.p.12 = mean(ci.lg.theta.p.12, na.rm = T),  
-                    ci.lg.theta.s.21 = mean(ci.lg.theta.s.21, na.rm = T),
-                    ci.lg.theta.s.12 = mean(ci.lg.theta.s.12, na.rm = T)
+                    ci.lg.theta.p.21 = mean(ci.lg.theta.p.21, na.rm = TRUE),
+                    ci.lg.theta.p.12 = mean(ci.lg.theta.p.12, na.rm = TRUE),  
+                    ci.lg.theta.s.21 = mean(ci.lg.theta.s.21, na.rm = TRUE),
+                    ci.lg.theta.s.12 = mean(ci.lg.theta.s.12, na.rm = TRUE)
                     
           ) %>%
           bind_rows(output.betas, .)
@@ -2046,11 +2045,11 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                     me.theta.s.21 = mean(theta.s.21.err),
                     me.theta.s.12 = mean(theta.s.12.err),
                     
-                    rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
+                    rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
                     
-                    ci.lg.theta.s.21 = mean(ci.lg.theta.s.21, na.rm = T),
-                    ci.lg.theta.s.12 = mean(ci.lg.theta.s.12, na.rm = T)
+                    ci.lg.theta.s.21 = mean(ci.lg.theta.s.21, na.rm = TRUE),
+                    ci.lg.theta.s.12 = mean(ci.lg.theta.s.12, na.rm = TRUE)
                     
           ) %>%
           bind_rows(output.betas, .)
@@ -2159,23 +2158,23 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                     me.theta.s.12 = mean(theta.s.12.err),
                     me.theta.s.32 = mean(theta.s.32.err),
                     
-                    rm.theta.p.21 = (sum(theta.p.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5, 
-                    rm.theta.p.31 = (sum(theta.p.31.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5, 
-                    rm.theta.p.12 = (sum(theta.p.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5, 
-                    rm.theta.p.32 = (sum(theta.p.32.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5, 
-                    rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5, 
-                    rm.theta.s.31 = (sum(theta.s.31.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.32 = (sum(theta.s.32.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
+                    rm.theta.p.21 = (sum(theta.p.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5, 
+                    rm.theta.p.31 = (sum(theta.p.31.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5, 
+                    rm.theta.p.12 = (sum(theta.p.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5, 
+                    rm.theta.p.32 = (sum(theta.p.32.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5, 
+                    rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5, 
+                    rm.theta.s.31 = (sum(theta.s.31.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.32 = (sum(theta.s.32.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
                     
-                    ci.lg.theta.p.21 = mean(ci.lg.theta.p.21, na.rm = T), 
-                    ci.lg.theta.p.31 = mean(ci.lg.theta.p.31, na.rm = T), 
-                    ci.lg.theta.p.12 = mean(ci.lg.theta.p.12, na.rm = T), 
-                    ci.lg.theta.p.32 = mean(ci.lg.theta.p.32, na.rm = T), 
-                    ci.lg.theta.s.21 = mean(ci.lg.theta.s.21, na.rm = T), 
-                    ci.lg.theta.s.31 = mean(ci.lg.theta.s.31, na.rm = T),
-                    ci.lg.theta.s.12 = mean(ci.lg.theta.s.12, na.rm = T),
-                    ci.lg.theta.s.32 = mean(ci.lg.theta.s.32, na.rm = T)
+                    ci.lg.theta.p.21 = mean(ci.lg.theta.p.21, na.rm = TRUE), 
+                    ci.lg.theta.p.31 = mean(ci.lg.theta.p.31, na.rm = TRUE), 
+                    ci.lg.theta.p.12 = mean(ci.lg.theta.p.12, na.rm = TRUE), 
+                    ci.lg.theta.p.32 = mean(ci.lg.theta.p.32, na.rm = TRUE), 
+                    ci.lg.theta.s.21 = mean(ci.lg.theta.s.21, na.rm = TRUE), 
+                    ci.lg.theta.s.31 = mean(ci.lg.theta.s.31, na.rm = TRUE),
+                    ci.lg.theta.s.12 = mean(ci.lg.theta.s.12, na.rm = TRUE),
+                    ci.lg.theta.s.32 = mean(ci.lg.theta.s.32, na.rm = TRUE)
           ) %>%
           bind_rows(output.betas, .)
         
@@ -2239,15 +2238,15 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                     me.theta.s.12 = mean(theta.s.12.err),
                     me.theta.s.32 = mean(theta.s.32.err),
                     
-                    rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5, 
-                    rm.theta.s.31 = (sum(theta.s.31.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.32 = (sum(theta.s.32.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
+                    rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5, 
+                    rm.theta.s.31 = (sum(theta.s.31.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.32 = (sum(theta.s.32.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
                     
-                    ci.lg.theta.s.21 = mean(ci.lg.theta.s.21, na.rm = T), 
-                    ci.lg.theta.s.31 = mean(ci.lg.theta.s.31, na.rm = T),
-                    ci.lg.theta.s.12 = mean(ci.lg.theta.s.12, na.rm = T),
-                    ci.lg.theta.s.32 = mean(ci.lg.theta.s.32, na.rm = T)
+                    ci.lg.theta.s.21 = mean(ci.lg.theta.s.21, na.rm = TRUE), 
+                    ci.lg.theta.s.31 = mean(ci.lg.theta.s.31, na.rm = TRUE),
+                    ci.lg.theta.s.12 = mean(ci.lg.theta.s.12, na.rm = TRUE),
+                    ci.lg.theta.s.32 = mean(ci.lg.theta.s.32, na.rm = TRUE)
           ) %>%
           bind_rows(output.betas, .)
         
@@ -2388,33 +2387,33 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                     me.theta.s.13 = mean(theta.s.13.err),
                     me.theta.s.23 = mean(theta.s.23.err),
                     
-                    rm.theta.p.21 = (sum(theta.p.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.p.31 = (sum(theta.p.31.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.p.12 = (sum(theta.p.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.p.32 = (sum(theta.p.32.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.p.13 = (sum(theta.p.13.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.p.23 = (sum(theta.p.23.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
+                    rm.theta.p.21 = (sum(theta.p.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.p.31 = (sum(theta.p.31.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.p.12 = (sum(theta.p.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.p.32 = (sum(theta.p.32.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.p.13 = (sum(theta.p.13.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.p.23 = (sum(theta.p.23.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
                     
-                    rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.31 = (sum(theta.s.31.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.32 = (sum(theta.s.32.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.13 = (sum(theta.s.13.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.23 = (sum(theta.s.23.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
+                    rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.31 = (sum(theta.s.31.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.32 = (sum(theta.s.32.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.13 = (sum(theta.s.13.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.23 = (sum(theta.s.23.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
                     
-                    ci.lg.theta.p.21 = mean(ci.lg.theta.p.21, na.rm = T),
-                    ci.lg.theta.p.31 = mean(ci.lg.theta.p.31, na.rm = T),
-                    ci.lg.theta.p.12 = mean(ci.lg.theta.p.12, na.rm = T),
-                    ci.lg.theta.p.32 = mean(ci.lg.theta.p.32, na.rm = T),
-                    ci.lg.theta.p.13 = mean(ci.lg.theta.p.13, na.rm = T),
-                    ci.lg.theta.p.23 = mean(ci.lg.theta.p.23, na.rm = T),
+                    ci.lg.theta.p.21 = mean(ci.lg.theta.p.21, na.rm = TRUE),
+                    ci.lg.theta.p.31 = mean(ci.lg.theta.p.31, na.rm = TRUE),
+                    ci.lg.theta.p.12 = mean(ci.lg.theta.p.12, na.rm = TRUE),
+                    ci.lg.theta.p.32 = mean(ci.lg.theta.p.32, na.rm = TRUE),
+                    ci.lg.theta.p.13 = mean(ci.lg.theta.p.13, na.rm = TRUE),
+                    ci.lg.theta.p.23 = mean(ci.lg.theta.p.23, na.rm = TRUE),
                     
-                    ci.lg.theta.s.21 = mean(ci.lg.theta.s.21, na.rm = T),
-                    ci.lg.theta.s.31 = mean(ci.lg.theta.s.31, na.rm = T),
-                    ci.lg.theta.s.12 = mean(ci.lg.theta.s.12, na.rm = T),
-                    ci.lg.theta.s.32 = mean(ci.lg.theta.s.32, na.rm = T),
-                    ci.lg.theta.s.13 = mean(ci.lg.theta.s.13, na.rm = T),
-                    ci.lg.theta.s.23 = mean(ci.lg.theta.s.23, na.rm = T)
+                    ci.lg.theta.s.21 = mean(ci.lg.theta.s.21, na.rm = TRUE),
+                    ci.lg.theta.s.31 = mean(ci.lg.theta.s.31, na.rm = TRUE),
+                    ci.lg.theta.s.12 = mean(ci.lg.theta.s.12, na.rm = TRUE),
+                    ci.lg.theta.s.32 = mean(ci.lg.theta.s.32, na.rm = TRUE),
+                    ci.lg.theta.s.13 = mean(ci.lg.theta.s.13, na.rm = TRUE),
+                    ci.lg.theta.s.23 = mean(ci.lg.theta.s.23, na.rm = TRUE)
           ) %>%
           bind_rows(output.betas, .)
         
@@ -2495,19 +2494,19 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                     me.theta.s.13 = mean(theta.s.13.err),
                     me.theta.s.23 = mean(theta.s.23.err),
                     
-                    rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.31 = (sum(theta.s.31.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.32 = (sum(theta.s.32.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.13 = (sum(theta.s.13.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.s.23 = (sum(theta.s.23.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
+                    rm.theta.s.21 = (sum(theta.s.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.31 = (sum(theta.s.31.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.12 = (sum(theta.s.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.32 = (sum(theta.s.32.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.13 = (sum(theta.s.13.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.s.23 = (sum(theta.s.23.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
                     
-                    ci.lg.theta.s.21 = mean(ci.lg.theta.s.21, na.rm = T),
-                    ci.lg.theta.s.31 = mean(ci.lg.theta.s.31, na.rm = T),
-                    ci.lg.theta.s.12 = mean(ci.lg.theta.s.12, na.rm = T),
-                    ci.lg.theta.s.32 = mean(ci.lg.theta.s.32, na.rm = T),
-                    ci.lg.theta.s.13 = mean(ci.lg.theta.s.13, na.rm = T),
-                    ci.lg.theta.s.23 = mean(ci.lg.theta.s.23, na.rm = T)
+                    ci.lg.theta.s.21 = mean(ci.lg.theta.s.21, na.rm = TRUE),
+                    ci.lg.theta.s.31 = mean(ci.lg.theta.s.31, na.rm = TRUE),
+                    ci.lg.theta.s.12 = mean(ci.lg.theta.s.12, na.rm = TRUE),
+                    ci.lg.theta.s.32 = mean(ci.lg.theta.s.32, na.rm = TRUE),
+                    ci.lg.theta.s.13 = mean(ci.lg.theta.s.13, na.rm = TRUE),
+                    ci.lg.theta.s.23 = mean(ci.lg.theta.s.23, na.rm = TRUE)
           ) %>%
           bind_rows(output.betas, .)
         
@@ -2565,11 +2564,11 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                     me.theta.p.21 = mean(theta.p.21.err),
                     me.theta.p.12 = mean(theta.p.12.err),
                     
-                    rm.theta.p.21 = (sum(theta.p.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.p.12 = (sum(theta.p.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
+                    rm.theta.p.21 = (sum(theta.p.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.p.12 = (sum(theta.p.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
                     
-                    ci.lg.theta.p.21 = mean(ci.lg.theta.p.21, na.rm = T),
-                    ci.lg.theta.p.12 = mean(ci.lg.theta.p.12, na.rm = T)
+                    ci.lg.theta.p.21 = mean(ci.lg.theta.p.21, na.rm = TRUE),
+                    ci.lg.theta.p.12 = mean(ci.lg.theta.p.12, na.rm = TRUE)
                     
           ) %>%
           bind_rows(output.betas, .)
@@ -2639,15 +2638,15 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                     me.theta.p.12 = mean(theta.p.12.err), 
                     me.theta.p.32 = mean(theta.p.32.err), 
                     
-                    rm.theta.p.21 = (sum(theta.p.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5, 
-                    rm.theta.p.31 = (sum(theta.p.31.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5, 
-                    rm.theta.p.12 = (sum(theta.p.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5, 
-                    rm.theta.p.32 = (sum(theta.p.32.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5, 
+                    rm.theta.p.21 = (sum(theta.p.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5, 
+                    rm.theta.p.31 = (sum(theta.p.31.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5, 
+                    rm.theta.p.12 = (sum(theta.p.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5, 
+                    rm.theta.p.32 = (sum(theta.p.32.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5, 
                     
-                    ci.lg.theta.p.21 = mean(ci.lg.theta.p.21, na.rm = T), 
-                    ci.lg.theta.p.31 = mean(ci.lg.theta.p.31, na.rm = T), 
-                    ci.lg.theta.p.12 = mean(ci.lg.theta.p.12, na.rm = T), 
-                    ci.lg.theta.p.32 = mean(ci.lg.theta.p.32, na.rm = T)
+                    ci.lg.theta.p.21 = mean(ci.lg.theta.p.21, na.rm = TRUE), 
+                    ci.lg.theta.p.31 = mean(ci.lg.theta.p.31, na.rm = TRUE), 
+                    ci.lg.theta.p.12 = mean(ci.lg.theta.p.12, na.rm = TRUE), 
+                    ci.lg.theta.p.32 = mean(ci.lg.theta.p.32, na.rm = TRUE)
           ) %>%
           bind_rows(output.betas, .)
         
@@ -2732,19 +2731,19 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
                     me.theta.p.13 = mean(theta.p.13.err),
                     me.theta.p.23 = mean(theta.p.23.err),
                     
-                    rm.theta.p.21 = (sum(theta.p.21.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.p.31 = (sum(theta.p.31.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.p.12 = (sum(theta.p.12.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.p.32 = (sum(theta.p.32.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.p.13 = (sum(theta.p.13.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
-                    rm.theta.p.23 = (sum(theta.p.23.err ^ 2) / (nrow(tmp.theta - 1))) ^ 0.5,
+                    rm.theta.p.21 = (sum(theta.p.21.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.p.31 = (sum(theta.p.31.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.p.12 = (sum(theta.p.12.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.p.32 = (sum(theta.p.32.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.p.13 = (sum(theta.p.13.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
+                    rm.theta.p.23 = (sum(theta.p.23.err ^ 2) / (dim(tmp.theta)[1] - 1)) ^ 0.5,
                     
-                    ci.lg.theta.p.21 = mean(ci.lg.theta.p.21, na.rm = T),
-                    ci.lg.theta.p.31 = mean(ci.lg.theta.p.31, na.rm = T),
-                    ci.lg.theta.p.12 = mean(ci.lg.theta.p.12, na.rm = T),
-                    ci.lg.theta.p.32 = mean(ci.lg.theta.p.32, na.rm = T),
-                    ci.lg.theta.p.13 = mean(ci.lg.theta.p.13, na.rm = T),
-                    ci.lg.theta.p.23 = mean(ci.lg.theta.p.23, na.rm = T)
+                    ci.lg.theta.p.21 = mean(ci.lg.theta.p.21, na.rm = TRUE),
+                    ci.lg.theta.p.31 = mean(ci.lg.theta.p.31, na.rm = TRUE),
+                    ci.lg.theta.p.12 = mean(ci.lg.theta.p.12, na.rm = TRUE),
+                    ci.lg.theta.p.32 = mean(ci.lg.theta.p.32, na.rm = TRUE),
+                    ci.lg.theta.p.13 = mean(ci.lg.theta.p.13, na.rm = TRUE),
+                    ci.lg.theta.p.23 = mean(ci.lg.theta.p.23, na.rm = TRUE)
           ) %>%
           bind_rows(output.betas, .)
         
@@ -2779,10 +2778,10 @@ theta.bootstrap.f <- function(sim.data, tmp.theta, tmp.theta.boot, output.boot) 
         tmp.boot.se <- 
           group_by(as_tibble(tmp.theta.boot), rep) %>%
           summarise(., 
-                    se.bt.theta.p.21 = sd(theta.p.21, na.rm = T),
-                    se.bt.theta.p.12 = sd(theta.p.12, na.rm = T),
-                    se.bt.theta.s.21 = sd(theta.s.21, na.rm = T),
-                    se.bt.theta.s.12 = sd(theta.s.12, na.rm = T)
+                    se.bt.theta.p.21 = sd(theta.p.21, na.rm = TRUE),
+                    se.bt.theta.p.12 = sd(theta.p.12, na.rm = TRUE),
+                    se.bt.theta.s.21 = sd(theta.s.21, na.rm = TRUE),
+                    se.bt.theta.s.12 = sd(theta.s.12, na.rm = TRUE)
           )
         
         tmp.boot.lg <-
@@ -2855,8 +2854,8 @@ theta.bootstrap.f <- function(sim.data, tmp.theta, tmp.theta.boot, output.boot) 
         tmp.boot.se <- 
           group_by(as_tibble(tmp.theta.boot), rep) %>%
           summarise(., 
-                    se.bt.theta.s.21 = sd(theta.s.21, na.rm = T),
-                    se.bt.theta.s.12 = sd(theta.s.12, na.rm = T)
+                    se.bt.theta.s.21 = sd(theta.s.21, na.rm = TRUE),
+                    se.bt.theta.s.12 = sd(theta.s.12, na.rm = TRUE)
           )
   
         tmp.boot.lg <-
@@ -2922,14 +2921,14 @@ theta.bootstrap.f <- function(sim.data, tmp.theta, tmp.theta.boot, output.boot) 
         tmp.boot.se <- 
           group_by(as_tibble(tmp.theta.boot), rep) %>%
           summarise(., 
-                    se.bt.theta.p.21 = sd(theta.p.21, na.rm = T),
-                    se.bt.theta.p.31 = sd(theta.p.31, na.rm = T),
-                    se.bt.theta.p.12 = sd(theta.p.12, na.rm = T),
-                    se.bt.theta.p.32 = sd(theta.p.32, na.rm = T),
-                    se.bt.theta.s.21 = sd(theta.s.21, na.rm = T),
-                    se.bt.theta.s.31 = sd(theta.s.31, na.rm = T),
-                    se.bt.theta.s.12 = sd(theta.s.12, na.rm = T),
-                    se.bt.theta.s.32 = sd(theta.s.32, na.rm = T)
+                    se.bt.theta.p.21 = sd(theta.p.21, na.rm = TRUE),
+                    se.bt.theta.p.31 = sd(theta.p.31, na.rm = TRUE),
+                    se.bt.theta.p.12 = sd(theta.p.12, na.rm = TRUE),
+                    se.bt.theta.p.32 = sd(theta.p.32, na.rm = TRUE),
+                    se.bt.theta.s.21 = sd(theta.s.21, na.rm = TRUE),
+                    se.bt.theta.s.31 = sd(theta.s.31, na.rm = TRUE),
+                    se.bt.theta.s.12 = sd(theta.s.12, na.rm = TRUE),
+                    se.bt.theta.s.32 = sd(theta.s.32, na.rm = TRUE)
           )
         
         tmp.boot.lg <-
@@ -3026,10 +3025,10 @@ theta.bootstrap.f <- function(sim.data, tmp.theta, tmp.theta.boot, output.boot) 
         tmp.boot.se <- 
           group_by(as_tibble(tmp.theta.boot), rep) %>%
           summarise(., 
-                    se.bt.theta.s.21 = sd(theta.s.21, na.rm = T),
-                    se.bt.theta.s.31 = sd(theta.s.31, na.rm = T),
-                    se.bt.theta.s.12 = sd(theta.s.12, na.rm = T),
-                    se.bt.theta.s.32 = sd(theta.s.32, na.rm = T)
+                    se.bt.theta.s.21 = sd(theta.s.21, na.rm = TRUE),
+                    se.bt.theta.s.31 = sd(theta.s.31, na.rm = TRUE),
+                    se.bt.theta.s.12 = sd(theta.s.12, na.rm = TRUE),
+                    se.bt.theta.s.32 = sd(theta.s.32, na.rm = TRUE)
           )
         
         tmp.boot.lg <-
@@ -3334,8 +3333,8 @@ theta.bootstrap.f <- function(sim.data, tmp.theta, tmp.theta.boot, output.boot) 
       tmp.boot.se <- 
         group_by(as_tibble(tmp.theta.boot), rep) %>%
         summarise(., 
-                  se.bt.theta.p.21 = sd(theta_p_21, na.rm = T),
-                  se.bt.theta.p.12 = sd(theta_p_12, na.rm = T)
+                  se.bt.theta.p.21 = sd(theta_p_21, na.rm = TRUE),
+                  se.bt.theta.p.12 = sd(theta_p_12, na.rm = TRUE)
         )
       
       tmp.boot.lg <-
@@ -3370,10 +3369,10 @@ theta.bootstrap.f <- function(sim.data, tmp.theta, tmp.theta.boot, output.boot) 
       tmp.boot.se <- 
         group_by(as_tibble(tmp.theta.boot), rep) %>%
         summarise(., 
-                  se.bt.theta.p.21 = sd(theta_p_21, na.rm = T),
-                  se.bt.theta.p.31 = sd(theta_p_31, na.rm = T),
-                  se.bt.theta.p.12 = sd(theta_p_12, na.rm = T),
-                  se.bt.theta.p.32 = sd(theta_p_32, na.rm = T)
+                  se.bt.theta.p.21 = sd(theta_p_21, na.rm = TRUE),
+                  se.bt.theta.p.31 = sd(theta_p_31, na.rm = TRUE),
+                  se.bt.theta.p.12 = sd(theta_p_12, na.rm = TRUE),
+                  se.bt.theta.p.32 = sd(theta_p_32, na.rm = TRUE)
         )
       
       tmp.boot.lg <-
@@ -3474,7 +3473,7 @@ psi.bootstrap.f <- function(sim.data, tmp.psi, tmp.psi.boot, tmp.theta.boot, out
     tmp.boot.se <- 
       group_by(as_tibble(tmp.psi.boot), rep) %>%
       summarise(., 
-                se.bt.psi.1 = sd(psi.1, na.rm = T)
+                se.bt.psi.1 = sd(psi.1, na.rm = TRUE)
       )
     
     tmp.boot.lg <-
@@ -3504,10 +3503,10 @@ psi.bootstrap.f <- function(sim.data, tmp.psi, tmp.psi.boot, tmp.theta.boot, out
         tmp.boot.se.theta <- 
           group_by(as_tibble(tmp.theta.boot), rep) %>%
           summarise(., 
-                    se.bt.theta.p.21 = sd(theta.p.21, na.rm = T),
-                    se.bt.theta.p.12 = sd(theta.p.12, na.rm = T),
-                    se.bt.theta.s.21 = sd(theta.s.21, na.rm = T),
-                    se.bt.theta.s.12 = sd(theta.s.12, na.rm = T)
+                    se.bt.theta.p.21 = sd(theta.p.21, na.rm = TRUE),
+                    se.bt.theta.p.12 = sd(theta.p.12, na.rm = TRUE),
+                    se.bt.theta.s.21 = sd(theta.s.21, na.rm = TRUE),
+                    se.bt.theta.s.12 = sd(theta.s.12, na.rm = TRUE)
           )
         
         theta_col_tmp <- grep("theta", colnames(tmp.psi))[1:4]
@@ -3540,8 +3539,8 @@ psi.bootstrap.f <- function(sim.data, tmp.psi, tmp.psi.boot, tmp.theta.boot, out
         tmp.boot.se.theta <- 
           group_by(as_tibble(tmp.theta.boot), rep) %>%
           summarise(., 
-                    se.bt.theta.s.21 = sd(theta.s.21, na.rm = T),
-                    se.bt.theta.s.12 = sd(theta.s.12, na.rm = T)
+                    se.bt.theta.s.21 = sd(theta.s.21, na.rm = TRUE),
+                    se.bt.theta.s.12 = sd(theta.s.12, na.rm = TRUE)
           )
         
         theta_col_tmp <- grep("theta", colnames(tmp.psi))[1:2]
@@ -3586,7 +3585,7 @@ psi.bootstrap.f <- function(sim.data, tmp.psi, tmp.psi.boot, tmp.theta.boot, out
     #       tmp.boot.lg.cov[, 3],
     #       group_by(as_tibble(tmp.psi.boot), rep) %>%
     #         summarise(., 
-    #                   se.bt.psi.1 = sd(psi.1, na.rm = T),
+    #                   se.bt.psi.1 = sd(psi.1, na.rm = TRUE),
     #                   psi.1.bt.L = quantile(psi.1, 0.025),
     #                   psi.1.bt.U = quantile(psi.1, 0.975)
     #         ) %>%
@@ -3606,9 +3605,9 @@ psi.bootstrap.f <- function(sim.data, tmp.psi, tmp.psi.boot, tmp.theta.boot, out
     tmp.boot.se <- 
       group_by(as_tibble(tmp.psi.boot), rep) %>%
       summarise(., 
-                se.bt.psi.1 = sd(psi.1, na.rm = T),
-                se.bt.psi.2 = sd(psi.2, na.rm = T),
-                se.bt.psi.3 = sd(psi.3, na.rm = T)
+                se.bt.psi.1 = sd(psi.1, na.rm = TRUE),
+                se.bt.psi.2 = sd(psi.2, na.rm = TRUE),
+                se.bt.psi.3 = sd(psi.3, na.rm = TRUE)
       )
 
     tmp.boot.lg <-
@@ -3649,9 +3648,9 @@ psi.bootstrap.f <- function(sim.data, tmp.psi, tmp.psi.boot, tmp.theta.boot, out
     #       group_by(as_tibble(tmp.psi.boot), rep) %>%
     #         summarise(
     #           .,
-    #           se.bt.psi.1 = sd(psi.1, na.rm = T),
-    #           se.bt.psi.2 = sd(psi.2, na.rm = T),
-    #           se.bt.psi.3 = sd(psi.3, na.rm = T),
+    #           se.bt.psi.1 = sd(psi.1, na.rm = TRUE),
+    #           se.bt.psi.2 = sd(psi.2, na.rm = TRUE),
+    #           se.bt.psi.3 = sd(psi.3, na.rm = TRUE),
     #           psi.1.bt.L = quantile(psi.1, 0.025),
     #           psi.2.bt.L = quantile(psi.2, 0.025),
     #           psi.3.bt.L = quantile(psi.3, 0.025),
@@ -3690,27 +3689,27 @@ mlogit.group.predict.f <- function(dat, profile, output) {
         unlist(output[grep("^m.b", names(output))]) 
       ),
       ncol = 2,
-      byrow = T)
+      byrow = TRUE)
     
     beta.t <- 
       matrix(c(
         unlist(profile[grep("^b[0123456789]_", names(profile))]) 
       ),
       ncol = 2,
-      byrow = T)
+      byrow = TRUE)
     
     # Predict group-level probabilities from estimated 'psi.m' and true 'psi.t' parameters, find difference 'diff'
     psi.m <- mlogit.regress.predict.f(covariate, beta.m, B)
     psi.t <- mlogit.regress.predict.f(covariate, beta.t, B)
     diff <- psi.m - psi.t 
-    if (B == 2) {diff <- diff[, 1, drop = F]}
+    if (B == 2) {diff <- diff[, 1, drop = FALSE]}
     
     # Compute mean and SD accounting for counts of each unique observation history
-    n.diff <- (ncol(diff) * sum(dat$count))
+    n.diff <- (dim(diff)[2] * sum(dat$count))
     n.count <-
       matrix(dat$count, 
              nrow = length(dat$count), 
-             ncol = ncol(diff))
+             ncol = dim(diff)[2])
     diff.mean <- sum(diff * n.count) / n.diff
     diff.sd <- ((sum(diff ^ 2 * n.count) - sum(diff * n.count) ^ 2 / n.diff) / (n.diff - 1)) ^ 0.5
     
@@ -3745,11 +3744,11 @@ mlogit.group.predict.f <- function(dat, profile, output) {
       diff <- theta.m - theta.t 
       
       # Compute mean and SD accounting for counts of each unique observation history
-      n.diff <- (ncol(diff) * sum(dat$count))
+      n.diff <- (dim(diff)[2] * sum(dat$count))
       n.count <-
         matrix(dat$count, 
-               nrow = nrow(diff), 
-               ncol = ncol(diff))
+               nrow = dim(diff)[1], 
+               ncol = dim(diff)[2])
       
       diff.mean <- sum(diff * n.count) / n.diff
       diff.sd <- ((sum(diff ^ 2 * n.count) - sum(diff * n.count) ^ 2 / n.diff) / (n.diff - 1)) ^ 0.5
@@ -3765,40 +3764,40 @@ mlogit.group.predict.f <- function(dat, profile, output) {
       beta.m <-
         cbind(matrix(c(unlist(output[grep("^m.b0", names(output))])),
                      ncol = 2,
-                     byrow = T),
+                     byrow = TRUE),
               matrix(c(unlist(output[grep("^m.b1", names(output))])),
                      ncol = 2,
-                     byrow = T))
+                     byrow = TRUE))
       
       beta.t <- 
         cbind(matrix(c(unlist(profile[grep("^b0_", names(profile))])),
                      ncol = 2,
-                     byrow = T),
+                     byrow = TRUE),
               matrix(c(unlist(profile[grep("^b1_", names(profile))])),
                      ncol = 2,
-                     byrow = T))
+                     byrow = TRUE))
       
       # Predict group-level probabilities from estimated 'theta.m' and true 'theta.t' parameters, find difference 'diff'
       theta.m <- apply(beta.m, 1, function(x)
         mlogit.regress.predict.f(
           covariate, 
-          matrix(x, ncol = 2, byrow = F), 
+          matrix(x, ncol = 2, byrow = FALSE), 
           A))
       
       theta.t <- apply(beta.t, 1, function(x)
         mlogit.regress.predict.f(
           covariate, 
-          matrix(x, ncol = 2, byrow = F), 
+          matrix(x, ncol = 2, byrow = FALSE), 
           A))
       
       diff <- theta.m - theta.t 
       
       # Compute mean and SD accounting for counts of each unique observation history
-      n.diff <- ((nrow(diff) / length(dat$count)) * ncol(diff) * sum(dat$count))
+      n.diff <- ((dim(diff)[1] / length(dat$count)) * dim(diff)[2] * sum(dat$count))
       n.count <-
         matrix(dat$count, 
-               nrow = nrow(diff), 
-               ncol = ncol(diff))
+               nrow = dim(diff)[1], 
+               ncol = dim(diff)[2])
       diff.mean <- sum(diff * n.count) / n.diff
       diff.sd <- ((sum(diff ^ 2 * n.count) - sum(diff * n.count) ^ 2 / n.diff) / (n.diff - 1)) ^ 0.5
       
@@ -3937,9 +3936,9 @@ refit.check.f <- function(results){
 
 print.error.f <- function(err.msg, converge.fail){
   if (length(err.msg) > 0) {
-    cat(nrow(err.msg), "model(s) returned error messages: see 'error_msg' \n")
+    cat(dim(err.msg)[1], "model(s) returned error messages: see 'error_msg' \n")
     cat("sim  error message \n")
-    for (i in 1:min(nrow(err.msg), 20)) {
+    for (i in 1:min(dim(err.msg)[1], 20)) {
       cat(err.msg$sim[i], unlist(err.msg$msg[i]), "\n")
       if (i == 20) {
         cat("Only first 20 error messages displayed \n")
@@ -3949,7 +3948,7 @@ print.error.f <- function(err.msg, converge.fail){
   
   if (!is.null(converge.fail)) {
     cat(
-      nrow(converge.fail), "model(s) failed to converge and were removed from analyses: see 'converge_fail' \n"
+      dim(converge.fail)[1], "model(s) failed to converge and were removed from analyses: see 'converge_fail' \n"
     )
     converge.fail  %>% count(., sim = sim)  %>% print(.)
   }
