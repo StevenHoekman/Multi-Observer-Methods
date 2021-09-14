@@ -36,7 +36,7 @@ mix <- unlist(sim[grep("mix", colnames(sim))]) # Heterogeneous group probability
 mx.model <- sim$mx_model # Group probability model 
 n_bins <- sim$n_bins # Number of bins for covariates
 O_ps <- c(sim$O_p, sim$O_s) # Number of primary/secondary observers
-n_obs <- sum(O_ps) 
+n_obs <- sum(O_ps) # Total number of observers
 g <- unlist(sim[grep("^g_[0123456789]", colnames(sim))]) # Columns defining group size
 n.ps <- unlist(sim[grep("n_p|n_s", colnames(sim))]) # Target sample for primary/secondary observers
 
@@ -144,6 +144,7 @@ if (sim$Model == "M" | sim$Model == "M.theta.p" |  sim$Model == "mpX" | sim$Mode
         # Vector with group probability for species 1 to 3 and heterogeneous group probabilities of 12, 13, 23
         group.p <- 
           c((group.p - spp.sum / (1 + epsilon)) / (1 - epsilon / (1 + epsilon)), mix)
+        
         # 'col.mat' defines which species (columns) pairs are in which heterogeneous groups (rows) in 'group.p' vector
         col.mat <- matrix(c(
           1L, 1L, 0L, 1L, 0L, 1L, 0L, 1L, 1L), 
@@ -566,7 +567,8 @@ if (sim$Model == "M.theta.p" |
   
   if (sim$Model == "M.theta.p" |
       sim$Model == "M.theta" |
-      sim$Model == "M.theta.psi" | sim$Model == "M.theta.ps") {
+      sim$Model == "M.theta.psi" | 
+      sim$Model == "M.theta.ps") {
     
     # Vector 'covariate_theta' predicts classification probabilities (theta) for primary observers and for secondary observers when these share a common covariate
     covariate_theta <- rnorm(dim(data.obs)[1], mean = 0 , sd = 1)
@@ -621,10 +623,6 @@ if (sim$Model == "M.theta.p" |
           matrix(as.integer(rmnom(r[[1]], data.t[, b], prob = prob.cov[1:r[[1]], ])),
                  ncol = A)
       }
-
-      # theta.mean <-
-      #   apply(betas, 1, function(x) mlogit.dist.f(x)[1, 1]) %>%
-      #   setColnames(., c("theta.p.21", "theta.p.12"))
       
       theta.mean <-
         apply(betas, 1, function(x) mlogit.dist.f(x)[1, 1]) %>%
@@ -634,7 +632,10 @@ if (sim$Model == "M.theta.p" |
     ## Generate classifications for secondary observers
     
     # Skip data generation for model 'M.theta.p', because classification probabilities for secondary observers are not influenced by covariate.
-    if (sim$Model == "M.theta" | sim$Model == "M.theta.psi" | sim$Model == "M.theta+psi" | sim$Model == "M.theta.ps") {
+    if (sim$Model == "M.theta" |
+        sim$Model == "M.theta.psi" |
+        sim$Model == "M.theta+psi" | 
+        sim$Model == "M.theta.ps") {
       
       # 'betas' matrix summarizes regression coefficients for multinomial logistic regression predicting classification probabilities. Dimension 1 = observation states and dimension 2 = regression coefficients (col 1 = intercepts, col 2 = slopes).
       betas <- 
@@ -643,8 +644,8 @@ if (sim$Model == "M.theta.p" |
                c(
                  b0_theta_s1_21, b0_theta_s1_12,
                  b1_theta_s1_21, b1_theta_s1_12
-               )
-               , ncol = 2
+               ), 
+               ncol = 2
              ))
       
       # Loop for species
@@ -699,7 +700,8 @@ if (sim$Model == "M.theta.p" |
     # Loop for spp
     for (b in 1:B) {
       # Generate true classification probabilities for each true group from group-level covariate values and regression coefficients
-      prob.cov <- mlogit.regress.predict.f(data.obs[1:r[[1]], "covariate_theta"], betas[, , b, drop = FALSE], A)[, col.b[[b]]]
+      prob.cov <- 
+        mlogit.regress.predict.f(data.obs[1:r[[1]], "covariate_theta"], betas[, , b, drop = FALSE], A)[, col.b[[b]]]
       
       # For observer 'obs', generate 'r' observed groups and place in columns 'y'. Classifications are generated for each individual using random draws from a multinomial distribution with true classification probabilities 'prob.cov' for each true group.
 
@@ -726,7 +728,7 @@ if (sim$Model == "M.theta.p" |
       
       betas <- with(sim,
                     array(c(
-                      b0_theta_s1_21, b0_theta_s1_31, b1_theta_s1_21, b1_theta_s1_31, 
+                      b0_theta_s1_21, b0_theta_s1_31, b1_theta_s1_21, b1_theta_s1_31,
                       b0_theta_s1_12, b0_theta_s1_32, b1_theta_s1_12, b1_theta_s1_32
                     ),
                     dim = c(2, 2, 2)
@@ -784,7 +786,8 @@ if (sim$Model == "M.theta.p" |
     # Loop for species
     for (b in 1:B) {
       # Generate true classification probabilities for each true group from group-level covariate values and regression coefficients
-      prob.cov <- mlogit.regress.predict.f(data.obs[1:r[[1]], "covariate_theta"], betas[, , b, drop = FALSE], A)[, col.b[[b]]]
+      prob.cov <- 
+        mlogit.regress.predict.f(data.obs[1:r[[1]], "covariate_theta"], betas[, , b, drop = FALSE], A)[, col.b[[b]]]
       
       # For observer 'obs', generate 'r' observed groups and place in columns 'y'. Classifications are generated for each individual using random draws from a multinomial distribution with true classification probabilities 'prob.cov' for each true group.
       
@@ -861,15 +864,18 @@ if (is.matrix(data.obs)) data.obs <- qTBL(data.obs)
 ## Add additional fields to simulated survey data
 
 # Add 'covariate_psi' predicting true species probabilities (psi) to simulated survey data, if needed
-if ( (sim$Model == "M.psi" | sim$Model == "M.theta.psi" | sim$Model == "M.theta+psi") & !exists("unmodeled.covariate", inherits = FALSE) ) {
+if ((sim$Model == "M.psi" |
+     sim$Model == "M.theta.psi" |
+     sim$Model == "M.theta+psi") &
+    !exists("unmodeled.covariate", inherits = FALSE)) {
   
   settransform(data.obs, "covariate_psi" = covariate_psi[1:r[[1]]])
   
-} else if ( (exists("unmodeled.covariate", inherits = FALSE)) &  any(colnames(data.obs) == "covariate_theta") ) {
+} else if ((exists("unmodeled.covariate", inherits = FALSE)) &
+           any(colnames(data.obs) == "covariate_theta")) {
   
   # For statistical analyses including un-modeled heterogeneity in data (arising from covariates predicting true species probabilities or classification probabilities), remove covariate columns
   settransform(data.obs, "covariate_theta" = NULL)
-  
 }
 
 # Add 'group_size' with total size of each true group, id' indexing simulation replicates

@@ -42,14 +42,14 @@ optimize.M.f <- function(param, dat, keys, sim_profile){
   g1 <- sum(dat$group_size == 1) # Number of observation histories with group size = 1
   
   # Extract true simulation parameters from 'sim_profile'
-  B <- BB <- sim_profile$B
-  A <- sim_profile$A # Number of true species states (B and BB) and observation states (A)
+  B <- sim_profile$B#  Number of true species states B
+  A <- sim_profile$A # Number of observation states (A)
   n_O_ps <- c(sim_profile$O_p, sim_profile$O_s) # Number of primary/secondary observers
   n_observers <- sum(n_O_ps) # Total # of observers
   het_true <- unlist(sim_profile[grep("mix", names(sim_profile))]) # True heterogeneous group parameter(s)
   mx_model <- unlist(sim_profile[grep("mx_model", names(sim_profile))]) # Heterogeneous group model
 
-  # SuLmmarize values of estimated parameters in 'param'
+  # Summarize values of estimated parameters in 'param'
   
   # Extract classification probabilities (theta) to 'theta_tmp' array. Dimension 1 = mis- and partial ID parameters, dimension 2 = true species states 1 to B, dimension 3 = individual observers.
   theta_col <- grep("theta", names(sim_profile))
@@ -182,7 +182,9 @@ optimize.M.f <- function(param, dat, keys, sim_profile){
 ## ----- Compute likelihoods: group size >= 1 and homogeneous groups -----
     if (any(g > 1 & all(het_true == 0))) {
       # 'n_group_size' = count of unique observation histories by group size
-      n_group_size <-  dat  %>% dplyr::count(group_size)
+      n_group_size <-  
+        dat  %>% 
+        dplyr::count(group_size)
       
       # If key table of unique observed groups is present, compute likelihoods from keyed table of probabilities
       if (!is.null(keys)) {
@@ -281,7 +283,9 @@ optimize.M.f <- function(param, dat, keys, sim_profile){
     group_true_probability <- group.true.probability.key.f(group_probability, group_size_probmass, g)
     
     # n_group_size = sample of observation histories for each group size
-    n_group_size <-  dat  %>% dplyr::count(group_size)
+    n_group_size <-  
+      dat  %>% 
+      dplyr::count(group_size)
     
     # If key table of unique observed groups is present, compute likelihoods from keyed table of probabilities
     if (!is.null(keys)) {
@@ -415,9 +419,8 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
   g <- unique(dat$group_size) # Observed group sizes
   
   # Extract true simulation parameters from 'sim_profile'
-  # BB <- B <- sim_profile$B
-  B <- sim_profile$B
-  A <- sim_profile$A # Number of true spp states (B and BB) and observation states (A)
+  B <- sim_profile$B#  Number of true species states B
+  A <- sim_profile$A # Number of observation states (A)
   n_O_ps <- c(sim_profile$O_p, sim_profile$O_s) # Number of primary/secondary observers
   n_observers <- sum(n_O_ps) # Total number of observers
   het_true <- sim_profile[grep("mix", names(sim_profile))] # True heterogeneous group parameter(s)
@@ -571,7 +574,9 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
   # Vector 'likelihood' contains likelihoods for each unique observation history
   likelihood <- numeric(dim(dat)[1])
   # 'n_group_size' = count of unique observation histories by group size
-  n_group_size <-  dat  %>% dplyr::count(group_size) 
+  n_group_size <-  
+    dat  %>% 
+    dplyr::count(group_size) 
   
   if (all(het_true == 0)) { ## ----- Compute likelihoods: homogeneous groups -----
 
@@ -934,7 +939,9 @@ optimize.M.theta.p.f <- function(param, dat, sim_profile){
   likelihood <- numeric(dim(dat)[1])
   
   # 'n_group_size' = count of unique observation histories by group size
-  n_group_size <-  dat  %>% dplyr::count(group_size) 
+  n_group_size <-  
+    dat  %>% 
+    dplyr::count(group_size) 
   
   if (all(het_true == 0)) { ## ----- Compute likelihoods: homogeneous groups -----
     
@@ -1186,7 +1193,9 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
   # Vector 'likelihood' contains likelihoods for each unique observation history
   likelihood <- numeric(dim(dat)[1])
   # 'n_group_size' = count of unique observation histories by group size
-  n_group_size <-  dat  %>% dplyr::count(group_size)
+  n_group_size <-  
+    dat  %>% 
+    dplyr::count(group_size)
   
   if (all(het_true == 0)) { ## ----- Compute likelihoods: homogeneous groups -----
     
@@ -1517,7 +1526,9 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
   likelihood <- numeric(dim(dat)[1])
   
   # 'n_group_size' = count of unique observation histories by group size
-  n_group_size <-  dat  %>% dplyr::count(group_size)
+  n_group_size <-  
+    dat  %>% 
+    dplyr::count(group_size) 
 
   if (het_true == 0) { ## ----- Compute likelihoods: homogeneous groups -----
     
