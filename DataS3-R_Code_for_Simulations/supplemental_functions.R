@@ -1,5 +1,5 @@
 # Supplemental_functions.R
-# Supplemental functions for analyses and summaries, version 1.1.2
+# Supplemental functions for analyses and summaries, version 1.2.0
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code with supplemental functions for simulation analyses for estimating uncertain identification using multi-observer methods. These functions provide supplemental services such as: drawing random samples from probability distributions; computing probabilities and other values used in likelihood computations; and generating, formatting, summarizing, and error-checking simulation data and statistical output. Functions are grouped according by purpose. Comments with each function describe its purpose, inputs and outputs, and functioning of the code. Code developed and tested in R version 4.1.
@@ -59,38 +59,54 @@ mlogit.dist.f <- function(beta) {
     beta <- matrix(beta, ncol = 2, byrow = TRUE)
   }
   r <- rnorm(10^7.3)
-  d <- (1 + colSums(t(apply(beta, 1, function(x) exp(x[1] + x[2] * r)))))
-  distribution <- t(apply(beta, 1, function(x) exp(x[1] + x[2] * r) / d))
-  distribution <- rbind(distribution, 1 - colSums(distribution))
-  cbind(rowMeans(distribution), apply(distribution, 1, sd))
+  
+  # Linear predictors for each logit regression
+  predict <- t(apply(beta, 1, function(x) exp(x[1] + x[2] * r)))
+  
+  # Compute distribution of predicted values by category
+  distribution <- 
+    predict %r/% (1 + fsum(predict)  ) %>%
+    {
+      t(rbind(., 1 - colsums(.) ))  
+    } %>%
+    {
+      cbind(colmeans(.), fsd(.))
+    }
+  distribution
 }
 
 # Function: {mlogit.regress.predict.f} Predicts probabilities for multinomial logistic regression. Accepts input of vector of covariate values 'r', a matrix of beta parameters 'beta' (columns for intercept and slope, rows for each logit regression equation), and vector with number of categories 'n'. Returns a matrix with category-specific (columns 1 to 'n') predicted probabilities for each covariate value (rows).
 
-mlogit.regress.predict.f <- function(r, beta, n) {
-  # Make beta vectors into matrices
-  if (is.vector(beta)) {
-    beta <- matrix(beta, ncol = 2, byrow = TRUE)
-  }
-  distribution <- matrix(0, length(r), n)
-  denom <- matrix(0, n, length(r))
+mlogit.regress.predict.f <- function(cov_mat, beta_mat, n) {
   
-  beta <- t(apply(beta, 1, function(x) x))
+  # tidy up the inputs to matrices with 2 covariates, 3 beta parameters
   
-  # 'denom' is summation term in denominator
-  denom[1:(n - 1), ] <-
-    t(apply(beta, 1, function(x)
-      exp(x[1] + x[2] * r)))
+  if (!is.matrix(cov_mat))
+    cov_mat <- qM(cov_mat)
+  if (is.vector(beta_mat))
+    beta_mat <- matrix(beta_mat, byrow = TRUE, ncol = 2)
+  else if (is.array(beta_mat))
+    beta_mat <- qM(beta_mat)
   
-  denom <- 1 + colSums(denom)
+  if (dim(cov_mat)[2] == 1)
+    cov_mat <- cbind(cov_mat, 0)
+  if (dim(beta_mat)[2] == 2)
+    beta_mat <- cbind(beta_mat, 0)
   
-  # Compute probabilities for non-baseline categories
-  distribution[, 1:(n - 1)] <-
-    apply(beta, 1, function(x)
-      exp(x[1] + x[2] * r) / denom)
+  n_cat <- dim(beta_mat)[1] + 1
   
-  # Add probability for baseline category
-  distribution[ , n] <- 1 - rowSums(distribution)
+  # Compute distribution of predicted values by category
+  
+  distribution <-
+    t(apply(beta_mat, 1, function(b)
+      exp(b[1] + b[2] * cov_mat[, 1] + b[3] * cov_mat[, 2]))) %>%
+    {
+      . %r/% (1 + fsum(.))
+    } %>%
+    {
+      t(rbind(., 1 - colsums(.)))
+    } 
+  
   distribution
 }
 
@@ -176,9 +192,10 @@ psi.table.f <- function(g, psi){
 
 group.true.probability.key.f <- function(group_probability, size_probability, size){
 
-  if (!exists("B")) B <- dim(size_probability)[2]
+  # True species states B is 'BB' to avoid conflict with collapse::B 
+  BB <- dim(size_probability)[2]
   
-  if (B == 2) {
+  if (BB == 2) {
     # True species states B = 2
     
     # Compute probabilities for homogeneous groups at the start/end of each vector, then add probabilities for heterogeneous groups with decreasing/increasing numbers of species 1/species 2
@@ -196,7 +213,7 @@ group.true.probability.key.f <- function(group_probability, size_probability, si
     for (i in 1:length(size)) {
       names(output[[paste0(size[i])]]) <- paste0(size[i]:0, 0:size[i])
     }
-  }else if (B == 3) {
+  }else if (BB == 3) {
     # True species states B = 3
     
     # Add probability = 1 for group size = max(group size) + 1
@@ -325,15 +342,16 @@ group.probability.constant.f <- function(p, m, g) {
   # For all models, compute group probabilities (pi) from true species probabilities 'p' (psi) accounting for mean group sizes
   pi <- (p / g) / sum(p / g)
   pen <- 0 # Penalty term for violating model constraints
-  if (!exists("B")) B <- length(p)
-  
-  
+
+  # True species states B is 'BB' to avoid conflict with collapse::B 
+  BB <- length(p)
+
   if (any(m > 0)) {
     ## Heterogeneous groups. For clarity, terms here follow equation 7 in companion article
     # Here, 'pi' is "delta" term in companion article (group probabilities prior to heterogeneous groups forming)
     delta <- pi
 
-    if (B == 2) {
+    if (BB == 2) {
       # True species states B = 2
       
       # Here, heterogeneous group probability 'm' is equivalent to "epsilon"in the companion article
@@ -356,7 +374,7 @@ group.probability.constant.f <- function(p, m, g) {
       # Compute group probabilities (pi) for each species (pi.1, pi.2) and for heterogeneous groups (pi.12)
       pi <- c((delta - epsilon_fraction) / (1 - epsilon_fraction), epsilon)
       
-    } else if (B == 3) {
+    } else if (BB == 3) {
       # True species states B = 3
       
       # Compute sum of heterogeneous group probabilities 'epsilon' and sums of heterogeneous group probabilities for each species 'spp_sum', which is equivalent to the summation term for pi[bx] in the companion article
@@ -599,9 +617,11 @@ theta.calc.f <- function(B.max, B , A) {
   
   # Output function that accepts inputs of number of observers 'obs' and matrices of classification probability parameters (i.e. without probabilities of correct identification) 'mat', and returns matrices of classification probabilities for each observer with B rows and A columns. 
   function(obs, mat) {
+
     theta <- matrix(0, B, A)
     # Add correct classification probabilities
-    theta[int.mat[[1]][1:B, ]] <- 1 - colSums(mat[, , obs, drop = FALSE])
+    theta[int.mat[[1]][1:B, ]] <- 1 - colSums(matrix(mat[, , obs], ncol = B))
+    
     # Add uncertain identification probabilities
     theta[int.mat[[B + (B.max - 1) * (A - B)]]] <- mat[, , obs, drop = FALSE] 
     theta    
@@ -712,7 +732,7 @@ format.MOM.data.f <- function(data.obs, A, O_ps, mix, n_bins) {
     dat <- group_by_all(data.obs) %>%
       summarise(., count = n(), .groups = "drop") %>%
       arrange(.,!!! var.sort, !! var.sort.2)
-  
+
     # Return formatted observation histories without keyed table(s) if: (A) group size = 1 and no covariate predicting true species probabilities is present, if (B) continuous predictive covariates are present, or if (C) predictive covariates for true species probabilities and classification probabilities are present.
 
   if (max(dat$group_size) == 1 & (length(grep("covariate_psi", colnames(dat))) == 0))
@@ -739,30 +759,36 @@ format.MOM.data.f <- function(data.obs, A, O_ps, mix, n_bins) {
   }
     
   # Add key values to formatted survey data 
-  tmp[[1]] <- bind_cols(dat, tmp[[1]])
+  add_vars(tmp[[1]], "front") <- dat
   
-  # Add "B_states" (number of possible combinations of true groups) column to the key table
+  # Add "B_states" (number of possible combinations of true groups) and 'sum' total count of classifications for each keyed observed group to the key table
   if (any(mix > 0)) {
-    tmp[[2]] <- tmp[[2]][1:A] %>% 
-      mutate(g = apply(., 1, function(x) sum(x))) %>% 
-      transmute(B_states = apply(., 1, function(x) 
-        as.integer(factorial(x[A + 1] + B - 1) / prod(factorial(x[A + 1]), factorial(B - 1))))) %>% 
-      bind_cols(tmp[[2]], .)
+    
+    add_vars(tmp[[2]]) <-
+      ftransform(tmp[[2]], g = rowSums(tmp[[2]][1:A])) %>%
+      ftransform(.,
+                 B_states = sapply(.$g, function(x)
+                   as.integer(
+                     factorial(x + B - 1) / prod(factorial(x), factorial(B - 1))
+                   )),
+                 sum = as.integer(rowsums( qM(tmp[[2]][, 1:A]) ))) %>%
+      fselect(., c("B_states", "sum"))
+    
   }else{
-    tmp[[2]] <- bind_cols(tmp[[2]], data.frame(B_states = rep(B, dim(tmp[[2]])[1])))
+    
+    settransform(tmp[[2]], 
+                 B_states = rep(B, dim(tmp[[2]])[1]),
+                 sum = as.integer(rowsums( qM(tmp[[2]][, 1:A]) )))
   }
-
-  # Add total count of classifications for each keyed observed group
-  tmp[[2]] <- mutate(tmp[[2]], sum = as.integer(rowSums(tmp[[2]][, 1:A])))
   
   # For models with covariate predicting true species probabilities, add key value for unique covariate values across all simulation replicates 
   if (length(grep("covariate_psi", colnames(dat))) > 0) {
-    unique.cov.psi <-  
-      distinct(dat, covariate_psi) %>%
-      ungroup(.) %>%
-      arrange(., covariate_psi)
-
-    unique.cov.psi <-  bind_cols(unique.cov.psi, tibble(psi_key = 1:dim(unique.cov.psi)[1]))
+    
+    unique.cov.psi <-
+      funique(dat, cols = "covariate_psi") %>%
+      roworder(., "covariate_psi") %>%
+      ftransform(., psi_key = 1:dim(.)[1]) %>%
+      fselect(., "covariate_psi", "psi_key")
     
     tmp[[1]] <- left_join(tmp[[1]], unique.cov.psi, by = c("covariate_psi")) 
 
@@ -775,38 +801,41 @@ format.MOM.data.f <- function(data.obs, A, O_ps, mix, n_bins) {
 # Function: {generate.keys.f} Generates unique key values for unique observed groups in each simulation replicate and key tables for unique observed groups. Accepts inputs of simulated survey data 'dat', # of survey observers 'obs', and # of observation states 'A'. Returns list with 2 elements: 1) matrix 'out' containing key values for unique observed groups for each observer in each simulation replicate and 2) matrix 'unique.key' with a key table for unique observed groups. 
 
 generate.keys.f <- function(dat, obs, A) {
+  
   # Isolate classification data in 'd'
-  d <- dat[, c(1:(obs * A))]
+  d <- get_vars(dat, "^y" , regex = TRUE)
   col.n <- names(d)
   
   # Matrix 'col' gives column numbers for classifications of each observer (row)
   col <- t(sapply(1:obs, function(x)
     ((x - 1) * A + 1):(x * A)))
-  names(d) <- c(rep(paste0("V", 1:A), obs))
+  names(d) <- c(rep(paste0("A_", 1:A), obs))
   
   # Combine all observed groups A columns, adding one observed group with missing data
-  l <- bind_rows(lapply(1:obs, function(x)
-    d[, col[x, ]]), as.data.frame(matrix(0L, ncol = A)))
-  
   # 'unique.key' = Unique observed groups, with missing data getting key = 1
-  unique.key <-
-    distinct_all(l) %>% 
-    arrange_all(.)
   
-  unique.key <- bind_cols(unique.key, tibble(key = 1:dim(unique.key)[1]))
+  unique.key <-
+    bind_rows(lapply(1:obs, function(x)
+      d[, col[x, ]]),
+      qDF(matrix(
+        0L, ncol = A, dimnames = list(c(), paste0("A_", 1:A))
+      )) ) %>%
+    funique(.) %>%
+    arrange_all(.) %>%
+    ftransform(., key = 1:dim(.)[1]) %>%
+    setColnames(c(paste0('A_', 1:(dim(.)[2] - 1)), "key"))
   
   # Data frame 'out' contains unique key values for unique observed groups within each simulation replicate (indexed by 'id') with columns labeled for each observer
   
   out <-
-    do.call(cbind, lapply(1:obs, function(x)
-      left_join(d[, c(col[x,])], unique.key, by = c(paste0("V", 1:A))) %>%
-        select(., key))) 
-  
+    do.call(add_vars, lapply(1:obs, function(x)
+      left_join(d[, c(col[x, ])], unique.key, by = c(paste0("A_", 1:A))) %>%
+        fselect(., key))) 
+
   key.n <-
     sapply(strsplit(col.n[col[, 1]], "[.]"), function(x)
       paste0(substr(x[1], 1, nchar(x[1]) - 2), "_key"))
   names(out) <- key.n
-  names(unique.key) <- c(paste0('A_', 1:(dim(unique.key)[2] - 1)), "key")
   
   return(list(out, unique.key))
 }
@@ -816,38 +845,42 @@ generate.keys.f <- function(dat, obs, A) {
 generate.keys.theta.f <- function(dat, obs, A) {
 
   # Isolate observation data in 'd'.
-  d <- dat[, c(1:(obs * A))]
-  d <- bind_cols(d, "covariate_theta" = dat$covariate_theta)
-  col.n <- names(d)
+  
+  d <- get_vars(dat, c("^y", "^cov"), regex = TRUE ) %>%
+    setColnames(., c(rep(paste0("A_", 1:A), obs), "covariate_theta"))
   
   # Matrix 'col' gives column numbers for classifications of each observer (row)
   col <- t(sapply(1:obs, function(x)
     ((x - 1) * A + 1):(x * A)))
-  names(d) <- c(rep(paste0("V", 1:A), obs), "covariate_theta")
   col.cov <- dim(d)[2]
 
   # Combine observed groups for all observers in A columns, with an additional column for covariate values. Add one group observation with missing data.
-  l <- bind_rows(lapply(1:obs, function(x)
-    d[, c(col[x, ], col.cov)]), as.data.frame(matrix(0L, ncol = A)))
-  
   # unique.key = Unique combinations of observed groups and covariate values. Missing observations get keys = 1 to (# of covariate bins).
-  unique.key <-  
-    distinct_all(l, ) %>%
-    arrange_all(., )
   
-  unique.key <- bind_cols(unique.key, tibble(key = 1:dim(unique.key)[1]))
-  
+  unique.key <-
+    bind_rows(lapply(1:obs, function(x)
+      d[, c(col[x,], col.cov)]),
+      qDF(matrix(
+        0L, ncol = A, dimnames = list(c(), paste0("A_", 1:A))
+      ))) %>%
+    funique(.) %>%
+    arrange_all(.) %>%
+    ftransform(., key = 1:dim(.)[1]) %>%
+    setColnames(c(paste0('A_', 1:(dim(.)[2] - 2)), "covariate_theta", "key"))
+
   # Data frame 'out' contains unique key values for unique combinations of observed groups and covariate values, with columns labeled for each observer
+  
   out <-
-    do.call(cbind, lapply(1:obs, function(x)
-      left_join(d[, c(col[x, ], col.cov)], unique.key, by = c(paste0("V", 1:A), "covariate_theta")) %>% 
-        select(., key)))
+    do.call(add_vars, lapply(1:obs, function(x)
+      left_join(d[, c(col[x, ], col.cov)], unique.key, by = c(paste0("A_", 1:A), "covariate_theta")) %>% 
+        fselect(., key)))
+
+  col.n <- names(dat)[c(1:(obs * A))]
   
   key.n <-
     sapply(strsplit(col.n[col[, 1]], "[.]"), function(x)
       paste0(substr(x[1], 1, nchar(x[1]) - 2), "_key"))
   names(out) <- key.n
-  names(unique.key) <- c(paste0('A_', 1:(dim(unique.key)[2] - 2)), "covariate_theta", "key")
   
   return(list(out, unique.key))
 }
@@ -3950,7 +3983,7 @@ print.error.f <- function(err.msg, converge.fail){
     cat(
       dim(converge.fail)[1], "model(s) failed to converge and were removed from analyses: see 'converge_fail' \n"
     )
-    converge.fail  %>% count(., sim = sim)  %>% print(.)
+    converge.fail  %>% dplyr::count(., sim = sim)  %>% print(.)
   }
 }
 

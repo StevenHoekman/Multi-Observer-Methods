@@ -1,5 +1,5 @@
 # simulations_R_code.R
-# Simulation engine for estimating uncertain identification using multi-observer methods, version 1.1.1
+# Simulation engine for estimating uncertain identification using multi-observer methods, version 1.2.0
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code used to conduct "omnibus", "covariate", and "distinct observer" simulation analyses using multi-observer methods. Simulations rely on input in .csv file format (described in DataS2), which can be altered to conduct user-specified simulations. For multiple-observation method (MOM) and single-observation (SOM) method models and 2 to 4 species, code generates and analyzes simulated survey data, with summary output written to .csv format files. Descriptions of statistical methods are provided in the companion article and Appendices S1 to S3. Descriptions of R objects containing simulated survey data ('sim_data'), statistical output ('model_results'), and summarized simulation output ('output_global') are provided in DataS3. Code developed and tested in R version 4.1.
@@ -17,13 +17,22 @@
 #           Required R packages
 ###############################################################################
 
-# Install and load prior to executing code below
-library(plyr)       # Programming tools, data manipulation
-library(dplyr)      # Data frame manipulation
-library(doSNOW)     # Back end for parallel code execution
-library(mrds)       # Delta method for arbitrary functions
-library(extraDistr) # Probability distributions
-library(nnet)       # Log-linear multinomial models (only required for observed proportions models) 
+## Install and load prior to executing code below
+# library(fastverse)  High-performance statistical computing and data manipulation
+#   Utilized fastverse packages are 'collapse', 'matrixStats', & 'magrittr'
+# library(plyr)       Programming tools, data manipulation
+# library(dplyr)      Data frame manipulation
+# library(doSNOW)     Back end for parallel code execution
+# library(mrds)       Delta method for arbitrary functions
+# library(extraDistr) Probability distributions
+# library(nnet)       Log-linear multinomial models (only required for observed proportions models) 
+# library(Rfast)      High-performance data analysis
+
+library(fastverse)
+
+fastverse_detach(data.table, kit)
+
+fastverse_extend(plyr, dplyr, extraDistr, nnet, doSNOW, mrds, Rfast)
 
 ###############################################################################
 #     Register the 'doSNOW' parallel execution back end
@@ -554,7 +563,7 @@ if (model == "M") {
       as.data.frame(foreach(
         i = 1:id_max, 
         .combine = rbind, 
-        .packages = c("plyr", "dplyr"), 
+        .packages = c("plyr", "dplyr", "collapse", "Rfast"), 
         .errorhandling = "pass", 
         .options.snow = opts
       ) %dopar% {

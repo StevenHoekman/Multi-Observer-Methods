@@ -1,5 +1,5 @@
 # likelihood_equations.R
-# Generates R list objects with pre-computed values for likelihood equations, version 1.1.0
+# Generates R list objects with pre-computed values for likelihood equations, version 1.2.0
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # This code generates list objects 'likelihood_equations' composed of three types of elements: 1) 'true.combinations.g.[size]' containing a matrix with possible combinations of true groups for groups of each [size], 2) 'true.permutations.count.g.[size]' containing a vector with counts of possible permutations for each combination for a group true group of each [size], and 3) 'observed.[observed group]' containing a data frame summarizing equations for computing probabilities of the [observed group] specified by counts of individuals classified to each true species state. These lists substantially increase speed of model optimization. Required lists for conducting simulation study described in the companion article and MetadataS3 are provided in DataS2. Code below produces these lists to user specifications for the number of observation states (A), number of true species states (B), and the range of group sizes (g). See MetadataS3.pdf in for addition details. Code developed and tested in R version 4.1.
@@ -116,10 +116,11 @@ g.limits <- c(1L, 5L)
 # Lists 'true.combinations.count' and 'observed.combinations.count'  contain a list element for each group size g containing a matrix with each possible combination of true species states (B) or observation states (A) on separate row, with columns enumerating the count of individuals in each true species state 1 to B or each observation state 1 to A. 
 
 true.combinations <-
-  llply(g.limits[1]:g.limits[2], function(x)
+  lapply(g.limits[1]:g.limits[2], function(x)
     combinations(B, x, repeats.allowed = T))
+
 observed.combinations <-
-  llply(g.limits[1]:g.limits[2], function(x)
+  lapply(g.limits[1]:g.limits[2], function(x)
     combinations(A, x, repeats.allowed = T))
 
 true.combinations.count <- lapply(true.combinations, function(x)
