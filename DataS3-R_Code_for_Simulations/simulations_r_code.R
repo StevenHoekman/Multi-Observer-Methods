@@ -1,5 +1,5 @@
 # simulations_R_code.R
-# Simulation engine for estimating uncertain identification using multi-observer methods, version 1.2.0
+# Simulation engine for estimating uncertain identification using multi-observer methods, version 1.2.1
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code used to conduct "omnibus", "covariate", and "distinct observer" simulation analyses using multi-observer methods. Simulations rely on input in .csv file format (described in DataS2), which can be altered to conduct user-specified simulations. For multiple-observation method (MOM) and single-observation (SOM) method models and 2 to 4 species, code generates and analyzes simulated survey data, with summary output written to .csv format files. Descriptions of statistical methods are provided in the companion article and Appendices S1 to S3. Descriptions of R objects containing simulated survey data ('sim_data'), statistical output ('model_results'), and summarized simulation output ('output_global') are provided in DataS3. Code developed and tested in R version 4.1.
@@ -164,20 +164,18 @@ if (model == "M") {
   error_msg <- converge_fail <- NULL # For error messages and convergence warnings
   
   # Build empty data frame 'output_global' containing columns for global estimated parameters (across all simulations) and associated output 
-  output_global <- matrix(numeric(1), 0, length(parameters_names_global) * 7 + 1) 
+
   output_names_global <-
-    c(
-      paste0("m.", parameters_names_global),
-      paste0("sd.", parameters_names_global),
-      paste0("se.", parameters_names_global),
-      paste0("cv.", parameters_names_global),
-      paste0("me.", parameters_names_global),
-      paste0("rm.", parameters_names_global),
-      paste0("ci.", parameters_names_global),
-      "rep.tru"
-    )
-  colnames(output_global) <- output_names_global
-  output_global <- data.frame(output_global)
+    c(paste0(rep(
+      c("m.", "sd.", "se.", "cv.", "me.", "rm.", "ci."),
+      each = length(parameters_names_global)
+    ), parameters_names_global),
+    "rep.tru")
+  
+  output_global <- 
+    matrix(numeric(1), 0, length(parameters_names_global) * 7 + 1) %>%
+    setColnames(., output_names_global) %>%
+    qDF(.)
   
   # Loop for sequentially executing simulations for distinct models on each row of 'sim_profiles'
   for (sim in 1:dim(sim_profiles)[1]) { 
@@ -219,17 +217,13 @@ if (model == "M") {
     
     ## Generate initial objects 
     parameters_ini <- generate.ini.f(sim_profiles[sim, ], n_parameters) # Sets of alternative initial parameter values (rows)
+    
     output_names <-
-      c(
-        paste0("m.", parameters_names),
-        paste0("sd.", parameters_names),
-        paste0("se.", parameters_names),
-        paste0("cv.", parameters_names),
-        paste0("me.", parameters_names),
-        paste0("rm.", parameters_names),
-        paste0("ci.", parameters_names),
-        "rep.tru"
-      )
+      c(paste0(rep(
+        c("m.", "sd.", "se.", "cv.", "me.", "rm.", "ci."),
+        each = length(parameters_names)
+      ), parameters_names),
+      "rep.tru")
     
     # Vector 'constraints_low' contains lower boundaries for each parameter
     constraints_low <- c(rep(constraints_logit[1], n_parameters[3]), 
@@ -257,7 +251,9 @@ if (model == "M") {
     }
     
     # List 'sim_data' contains formatted simulated MOM survey observations and (optionally) a keyed table of unique group records
-    sim_data <- generate.simulation.data.f(sim_profiles[sim,]) 
+    sim_data <- 
+      generate.simulation.data.f(sim_profiles[sim,]) 
+    
     parameters_index <- 1 # Index for alternative sets of initial parameter values in 'parameters_ini'
 
   # ----- MOM/SOM Model Optimization ----- 
@@ -273,7 +269,7 @@ if (model == "M") {
     as.data.frame(foreach(
       i = 1:id_max, 
       .combine = rbind, 
-      .packages = c("plyr", "dplyr", "extraDistr"), 
+      .packages = c("plyr", "dplyr", "extraDistr", "magrittr", "collapse", "Rfast"), 
       .errorhandling = "pass", 
       .options.snow = opts
     ) %dopar% {
@@ -314,7 +310,7 @@ if (model == "M") {
         as.data.frame(foreach(
           i = 1:length(fail_tmp), 
           .combine = rbind, 
-          .packages = c("plyr", "dplyr", "extraDistr"), 
+          .packages = c("plyr", "dplyr", "extraDistr", "magrittr", "collapse", "Rfast"), 
           .errorhandling = "pass"
         ) %dopar% {
           optim(
@@ -366,10 +362,13 @@ if (model == "M") {
   parameters_true <- sim_profiles[sim, parameters_col]
   
   # Append summary statistics for this distinct model (vector 'output') as new row in data frame 'output_global'
-  parameters_output <- model.results.f(model_results, parameters_true, reps, n_parameters)
-  output <- summarise.results.f(parameters_output, parameters_true, reps)
-  names(output) <- output_names
-  output_global <- bind_rows(output_global, data.frame(t(output)))
+  parameters_output <- 
+    model.results.f(model_results, parameters_true, reps, n_parameters)
+  output <-
+    summarise.results.f(parameters_output, parameters_true, reps) %>%
+    setColnames(., output_names)
+  output_global <- 
+    bind_rows(output_global, qDF(t(output)))
   
   # For long simulation runs, prevent data loss by periodically writing results to a temporary file on hard drive 
   if (unclass(Sys.time()) - t_loop > 900) {
@@ -392,7 +391,9 @@ if (model == "M") {
   ## ----- Output & Reports ---
   
   # Combine simulation inputs and outputs, and write 'output_global' as .csv format file to user-specified path
-  output_global <- bind_cols(sim_profiles, output_global)
+  output_global <- 
+    bind_cols(sim_profiles, output_global)
+  
   try(
     write.csv(output_global, file = out_filename)
   )
@@ -438,20 +439,18 @@ if (model == "M") {
   theta_diff <- NULL
 
   # Build empty data frame 'output_global' containing columns for global estimated parameters (across all simulations) and associated output 
-  output_global <- matrix(numeric(1), 0, length(parameters_names_global) * 7 + 1) 
+
   output_names_global <-
-    c(
-      paste0("m.", parameters_names_global),
-      paste0("sd.", parameters_names_global),
-      paste0("se.", parameters_names_global),
-      paste0("cv.", parameters_names_global),
-      paste0("me.", parameters_names_global),
-      paste0("rm.", parameters_names_global),
-      paste0("ci.", parameters_names_global),
-      "rep.tru"
-    )
-  colnames(output_global) <- output_names_global
-  output_global <- data.frame(output_global)
+    c(paste0(rep(
+      c("m.", "sd.", "se.", "cv.", "me.", "rm.", "ci."),
+      each = length(parameters_names_global)
+    ), parameters_names_global),
+    "rep.tru")
+  
+  output_global <- 
+    matrix(numeric(1), 0, length(parameters_names_global) * 7 + 1) %>%
+    setColnames(., output_names_global) %>%
+    qDF(.)
   
   # Loop for sequentially executing simulations for distinct models on each row of 'sim_profiles'
   for (sim in 1:dim(sim_profiles)[1]) { 
@@ -499,17 +498,13 @@ if (model == "M") {
     
     # Generate initial objects 
     parameters_ini <- generate.ini.f(sim_profiles[sim, ], n_parameters) # Sets of alternative initial parameter values (rows)
+    
     output_names <-
-      c(
-        paste0("m.", parameters_names),
-        paste0("sd.", parameters_names),
-        paste0("se.", parameters_names),
-        paste0("cv.", parameters_names),
-        paste0("me.", parameters_names),
-        paste0("rm.", parameters_names),
-        paste0("ci.", parameters_names),
-        "rep.tru"
-      )
+      c(paste0(rep(
+        c("m.", "sd.", "se.", "cv.", "me.", "rm.", "ci."),
+        each = length(parameters_names)
+      ), parameters_names),
+      "rep.tru")
     
     # Vector 'constraints_low' contains lower boundary conditions for each parameter
     constraints_low <- c(rep(constraints_b0[1], n_parameters[1]),  
@@ -543,7 +538,9 @@ if (model == "M") {
     }
     
     # List 'sim_data' contains formatted simulated survey observations and (optionally) a keyed table of unique groups records
-    sim_data <- generate.simulation.data.f(sim_profiles[sim,]) 
+    sim_data <- 
+      generate.simulation.data.f(sim_profiles[sim,]) 
+    
     parameters_index <- 1 # Index for alternative sets of initial parameter values in 'parameters_ini'
     
     # Used for optional output for beta parameters
@@ -563,7 +560,7 @@ if (model == "M") {
       as.data.frame(foreach(
         i = 1:id_max, 
         .combine = rbind, 
-        .packages = c("plyr", "dplyr", "collapse", "Rfast"), 
+        .packages = c("plyr", "dplyr", "extraDistr", "magrittr", "collapse", "Rfast"), 
         .errorhandling = "pass", 
         .options.snow = opts
       ) %dopar% {
@@ -618,7 +615,7 @@ if (model == "M") {
           as.data.frame(foreach(
             i = 1:length(fail_tmp), 
             .combine = rbind, 
-            .packages = c("plyr", "dplyr"), 
+            .packages = c("plyr", "dplyr", "extraDistr", "magrittr", "collapse", "Rfast"), 
             .errorhandling = "pass"
           ) %dopar% {
             if (sim_profiles$Model[1] == "M.theta.p") {
@@ -689,14 +686,20 @@ if (model == "M") {
     parameters_true <- sim_profiles[sim, parameters_col]
     
     # Append summary statistics for this distinct model (vector 'output') as new row in data frame 'output_global'
-    parameters_output <- model.results.f(model_results, parameters_true, reps, n_parameters)
-    output <- summarise.results.f(parameters_output, parameters_true, reps)
-    names(output) <- output_names
-    output_global <- bind_rows(output_global, data.frame(t(output)))
+    parameters_output <- 
+      model.results.f(model_results, parameters_true, reps, n_parameters)
+    
+    output <- 
+      summarise.results.f(parameters_output, parameters_true, reps) %>%
+      setColnames(., output_names)
+    
+    output_global <- 
+      bind_rows(output_global, qDF(t(output)))
     
     # Optional output summarizing estimated versus true group-level predictions for classification probabilities. Un-comment the following 2 lines to add results to data frame 'output'. 
-    # tmp <- mlogit.group.predict.f(sim_data[[1]], sim_profiles[sim, ], output)
-    # theta_diff <- bind_rows(theta_diff, as_tibble(t(as.matrix(tmp))))
+    # if (model == "M.theta") {
+    #   tmp <- mlogit.group.predict.f(sim_data[[1]], sim_profiles[sim, ], output)
+    #   theta_diff <- bind_rows(theta_diff, qDF(t(tmp)) )}
     
     ## Output related to estimates of overall mean classification probabilities (theta) derived from regression coefficients of multinomial logistic regression and observed covariate values. Alternative 95% confidence limits for estimated means were constructed assuming 1) asymptotic normal distribution in natural scale (i.e, probabilities) and 2) asymptotic normal distribution of parameters in logit scale.
     # For each distinct model (rows), 'output_betas' contains summarized statistics (mean error, root mean square error, and 95% CI coverage) for overall mean estimates of classification probabilities
@@ -713,7 +716,7 @@ if (model == "M") {
     if (n_bootstrap > 1) {
       remove_col <- grep("id|count|key", colnames(sim_data[[1]]))
       tmp_theta_bootstrap <- NULL
-      tmp_id <- unique(sim_data_tmp$id)
+      tmp_id <- funique(sim_data_tmp$id)
       parameters_index <- 1
       cat("\n Completed model optimization for simulation", sim, "\n")
 
@@ -721,14 +724,20 @@ if (model == "M") {
       for (q in 1:reps) {
         
         # Simulated survey data for current simulation replicate 
-        data.rep <- filter(sim_data_tmp, id == tmp_id[q])
+        data.rep <- fsubset(sim_data_tmp, id == tmp_id[q])
         
         # Sample groups (with replacement) from simulated data to generate n (= n_bootstrap) re-samples of the simulated survey data
         tmp <-
-          ldply(1:n_bootstrap, function(x)
-            sample_n(data.rep, size = sum(data.rep$count), replace = TRUE, weight = count)) %>%
-          select(., !any_of(remove_col)) %>%
-          bind_cols(., id = rep(1:n_bootstrap, each = sum(data.rep$count)))
+          do.call(rbind,
+                  lapply(1:n_bootstrap, function(x)
+                    slice_sample(
+                      data.rep,
+                      n = sum(data.rep$count),
+                      replace = TRUE,
+                      weight_by = count
+                    ))) %>%
+          get_vars(.,-remove_col) %>%
+          ftransform(., id = rep(1:n_bootstrap, each = sum(data.rep$count)) )
 
         # List 'data.bootstrap' contains re-sampled data for the current simulation replicate, with formatting is identical to 'sim_data'
         data.bootstrap <-
@@ -740,7 +749,7 @@ if (model == "M") {
           as.data.frame(foreach(
             i = 1:n_bootstrap,
             .combine = rbind,
-            .packages = c("plyr", "dplyr"),
+            .packages = c("plyr", "dplyr", "extraDistr", "magrittr", "collapse", "Rfast"),
             .errorhandling = "pass", 
             .options.snow = opts
           ) %dopar% {
@@ -857,7 +866,9 @@ if (model == "M") {
   # ----- Output & Reports ---
   
   # Combine simulation inputs and outputs, and write 'output_global' as .csv format file to user-specified path
-  output_global <- bind_cols(sim_profiles, output_global, output_betas, output_bootstrap, theta_diff)
+  output_global <- 
+    add_vars(sim_profiles, output_global, output_betas, output_bootstrap, theta_diff)
+  
   try(
     write.csv(output_global, file = out_filename)
   )
@@ -908,21 +919,19 @@ if (model == "M") {
   error_msg <- converge_fail <- NULL # For error messages and convergence warnings
   
   # Build empty data frame 'output_global' containing columns for global estimated parameters (across all simulations) and associated output 
-  output_global <- matrix(numeric(1), 0, length(parameters_names_global) * 7 + 1) 
+  
   output_names_global <-
-    c(
-      paste0("m.", parameters_names_global),
-      paste0("sd.", parameters_names_global),
-      paste0("se.", parameters_names_global),
-      paste0("cv.", parameters_names_global),
-      paste0("me.", parameters_names_global),
-      paste0("rm.", parameters_names_global),
-      paste0("ci.", parameters_names_global),
-      "rep.tru"
-    )
-  colnames(output_global) <- output_names_global
-  output_global <- data.frame(output_global)
-
+    c(paste0(rep(
+      c("m.", "sd.", "se.", "cv.", "me.", "rm.", "ci."),
+      each = length(parameters_names_global)
+    ), parameters_names_global),
+    "rep.tru")
+  
+  output_global <- 
+    matrix(numeric(1), 0, length(parameters_names_global) * 7 + 1) %>%
+    setColnames(., output_names_global) %>%
+    qDF(.)
+  
   # Loop for sequentially executing simulations for distinct models on each row of 'sim_profiles'
   for (sim in 1:dim(sim_profiles)[1]) { 
     
@@ -971,17 +980,13 @@ if (model == "M") {
     
     # Generate initial objects 
     parameters_ini <- generate.ini.f(sim_profiles[sim, ], n_parameters) # Sets of alternative initial parameter values on each row
+    
     output_names <-
-      c(
-        paste0("m.", parameters_names),
-        paste0("sd.", parameters_names),
-        paste0("se.", parameters_names),
-        paste0("cv.", parameters_names),
-        paste0("me.", parameters_names),
-        paste0("rm.", parameters_names),
-        paste0("ci.", parameters_names),
-        "rep.tru"
-      )
+      c(paste0(rep(
+        c("m.", "sd.", "se.", "cv.", "me.", "rm.", "ci."),
+        each = length(parameters_names)
+      ), parameters_names),
+      "rep.tru")
     
     # Vector 'constraints_low' contains lower constraints for each parameter
     constraints_low <- c(rep(constraints_b0[1], (B - 1)),  rep(constraints_b1[1], (B - 1)),  
@@ -995,7 +1000,9 @@ if (model == "M") {
     constraints_up <- Inf
     
     # List 'sim_data' contains formatted simulated survey observations and (optionally) a keyed table of unique groups records and a keyed table of unique values for a covariate predicting true species probabilities (psi) 
-    sim_data <- generate.simulation.data.f(sim_profiles[sim,]) 
+    sim_data <- 
+      generate.simulation.data.f(sim_profiles[sim,]) 
+    
     parameters_index <- 1 # Index for alternative sets of initial parameter values in 'parameters_ini'
     
     # For optional output of regression coefficients
@@ -1036,7 +1043,7 @@ if (model == "M") {
       as.data.frame(foreach(
         i = 1:id_max, 
         .combine = rbind, 
-        .packages = c("plyr", "dplyr"), 
+        .packages = c("plyr", "dplyr", "extraDistr", "magrittr", "collapse", "Rfast"), 
         .errorhandling = "pass", 
         .options.snow = opts
       ) %dopar% {
@@ -1095,7 +1102,7 @@ if (model == "M") {
           as.data.frame(foreach(
             i = 1:length(fail_tmp), 
             .combine = rbind, 
-            .packages = c("plyr", "dplyr"), 
+            .packages = c("plyr", "dplyr", "extraDistr", "magrittr", "collapse", "Rfast"), 
             .errorhandling = "pass"
           ) %dopar% {
             if (sim_profiles$Model[1] == "M.psi") {
@@ -1166,13 +1173,18 @@ if (model == "M") {
     parameters_true <- sim_profiles[sim, parameters_col]
     
     # Append summary statistics for this distinct model (vector 'output') as new row in data frame 'output_global'
-    parameters_output <- model.results.f(model_results, parameters_true, reps, n_parameters)
-    output <- summarise.results.f(parameters_output, parameters_true, reps)
-    names(output) <- output_names
-    output_global <- bind_rows(output_global, data.frame(t(output)))
+    parameters_output <- 
+      model.results.f(model_results, parameters_true, reps, n_parameters)
+    
+    output <- 
+      summarise.results.f(parameters_output, parameters_true, reps) %>%
+      setColnames(., output_names)
+    
+    output_global <- 
+      bind_rows(output_global, qDF(t(output)))
     
     # Optional output summarizing estimated versus true group-level predictions for true species probabilities. Un-comment the following 'if' clause to append results to data frame 'output'.
-    # if (model == "M.psi") {
+    # if (model == "M.psi" | model == "M.theta.psi") {
     #   tmp <- mlogit.group.predict.f(sim_data[[1]], sim_profiles[sim, ], output)
     #   psi_diff <- bind_rows(psi_diff, as_tibble(t(as.matrix(tmp))))
     # }
@@ -1190,13 +1202,15 @@ if (model == "M") {
     
     # Bootstrap only if more than 1 bootstrap re-samples (n_bootstrap > 1) are specified in simulation inputs  
     if (n_bootstrap > 1 & B < 4) {
-      if (sim_profiles$Model[1] == "M.theta.psi" & A > 2 | sim_profiles$Model[1] == "M.theta+psi" & A > 2) {
+      if (sim_profiles$Model[1] == "M.theta.psi" & A > 2 | 
+          sim_profiles$Model[1] == "M.theta+psi" & A > 2) {
+        
         cat("For models 'M.theta.psi' and 'M.theta+psi', bootstrap estimates only supported for A = 2 \n")
       }else{
       remove_col <- grep("id|count|key", colnames(sim_data[[1]]))
       tmp_psi_bootstrap <- NULL
       tmp_theta_bootstrap <- NULL
-      tmp_id <- unique(sim_data_tmp$id)
+      tmp_id <- funique(sim_data_tmp$id)
       parameters_index <- 1
       cat("\n Completed model optimization for simulation", sim, "\n")
 
@@ -1204,19 +1218,20 @@ if (model == "M") {
       for (q in 1:reps) {
 
         # Simulated survey data for current simulation replicate 
-        data.rep <- filter(sim_data_tmp, id == tmp_id[q])
+        data.rep <- fsubset(sim_data_tmp, id == tmp_id[q])
         
         # Sample groups (with replacement) from simulated data to generate n (= n_bootstrap) re-samples of the simulated survey data
         tmp <-
-          ldply(1:n_bootstrap, function(x)
-            sample_n(
-              data.rep,
-              size = sum(data.rep$count),
-              replace = TRUE,
-              weight = count
-            )) %>%
-          select(., !any_of(remove_col)) %>%
-          bind_cols(., id = rep(1:n_bootstrap, each = sum(data.rep$count)))
+          do.call(rbind,
+                  lapply(1:n_bootstrap, function(x)
+                    slice_sample(
+                      data.rep,
+                      n = sum(data.rep$count),
+                      replace = TRUE,
+                      weight_by = count
+                    ))) %>%
+          get_vars(.,-remove_col) %>%
+          ftransform(., id = rep(1:n_bootstrap, each = sum(data.rep$count)) )
         
         # List 'data.bootstrap' contains re-sampled data for the current simulation replicate, with formatting is identical to 'sim_data'
         data.bootstrap <-
@@ -1229,7 +1244,7 @@ if (model == "M") {
           as.data.frame(foreach(
             i = 1:n_bootstrap,
             .combine = rbind,
-            .packages = c("plyr", "dplyr"),
+            .packages = c("plyr", "dplyr", "extraDistr", "magrittr", "collapse", "Rfast"),
             .errorhandling = "pass", 
             .options.snow = opts
           ) %dopar% {
@@ -1378,7 +1393,9 @@ if (model == "M") {
   # ----- Output & Reports ---
   
   # Combine simulation inputs and outputs, and write 'output_global' as .csv format file to user-specified path
-  output_global <- bind_cols(sim_profiles, output_global, output_betas, output_bootstrap, psi_diff)
+  output_global <- 
+    add_vars(sim_profiles, output_global, output_betas, output_bootstrap, psi_diff)
+  
   try(
     write.csv(output_global, file = out_filename)
   )
@@ -1475,20 +1492,18 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
     parameters_names_het_global <- c(parameters_names_het_global, sim_profiles_het_names[mix_col])}
   
   # Build empty data frame 'output_global' containing columns for global estimated parameters (across all simulations) and associated output 
-  output_global <- matrix(numeric(1), 0, length(parameters_names_het_global) * 7 + 1) 
+  
   output_names_global <-
-    c(
-      paste0("m.", parameters_names_het_global),
-      paste0("sd.", parameters_names_het_global),
-      paste0("se.", parameters_names_het_global),
-      paste0("cv.", parameters_names_het_global),
-      paste0("me.", parameters_names_het_global),
-      paste0("rm.", parameters_names_het_global),
-      paste0("ci.", parameters_names_het_global),
-      "rep.tru"
-    )
-  colnames(output_global) <- output_names_global
-  output_global <- data.frame(output_global)
+    c(paste0(rep(
+      c("m.", "sd.", "se.", "cv.", "me.", "rm.", "ci."),
+      each = length(parameters_names_het_global)
+    ), parameters_names_het_global),
+    "rep.tru")
+  
+  output_global <- 
+    matrix(numeric(1), 0, length(parameters_names_het_global) * 7 + 1) %>%
+    setColnames(., output_names_global) %>%
+    qDF(.)
   
   # Loop for sequentially executing simulations for distinct models on each row of 'sim_profiles'
   for (sim in 1:dim(sim_profiles)[1]) { 
@@ -1517,16 +1532,11 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
     n_parameters <- n_parameters_het
     
     output_names <-
-      c(
-        paste0("m.", parameters_names),
-        paste0("sd.", parameters_names),
-        paste0("se.", parameters_names),
-        paste0("cv.", parameters_names),
-        paste0("me.", parameters_names),
-        paste0("rm.", parameters_names),
-        paste0("ci.", parameters_names),
-        "rep.tru"
-      )
+      c(paste0(rep(
+        c("m.", "sd.", "se.", "cv.", "me.", "rm.", "ci."),
+        each = length(parameters_names)
+      ), parameters_names),
+      "rep.tru")
     
     # Vector 'constraints_low' contains lower boundaries for all parameters
     constraints_low <- c(rep(constraints_logit[1], n_parameters_het[3]), 
@@ -1539,25 +1549,35 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
     parameters_ini <- generate.ini.f(sim_profiles_het[sim, ], n_parameters_het) # Sets of alternative initial parameter values on each row
     
     # List 'sim_data' contains formatted simulated survey observations generated from the true model (i.e. with predictive covariates) and (optionally) a keyed table of unique groups records
-    sim_data <- generate.simulation.data.f(sim_profiles[sim,]) 
+    
+    sim_data <- 
+      generate.simulation.data.f(sim_profiles[sim,]) 
+    
     parameters_index <- 1 # Index for set of values used as initial parameters for optimization
     
     # Vector 'parameters_true' contains true parameters values from the data-generating model for the current simulation
     # Matrix 'psi_betas_mat' gives beta intercepts (column 1) and slopes (column 2) for regression parameters for predicting true species probabilities (psi)
 
     if (sim_profiles[sim, ]$Model == "M.psi") {
+      
       parameters_true <- c(
         unlist(sim_profiles[sim, c(grep("theta", profiles_names))]))
       
-      psi_betas_mat <- matrix(unlist(sim_profiles[sim, c(grep("_psi", profiles_names))]), ncol = 2, byrow = TRUE) 
+      psi_betas_mat <- 
+        matrix(unlist(sim_profiles[sim, c(grep("_psi", profiles_names))]), 
+               ncol = 2, byrow = TRUE) 
       
       if (B == 2) {
-        parameters_true <- c(parameters_true,
-                      sim_data[[4]][[1]][1])
+        parameters_true <- 
+          c(parameters_true, sim_data[[4]][[1]][1])
       }else{
-        psi_betas_mat <- matrix(unlist(sim_profiles[sim, c(grep("_psi", profiles_names))]), ncol = 2, byrow = TRUE)
-        parameters_true <- c(parameters_true,
-                      sim_data[[4]][[1]][1:2])
+        
+        psi_betas_mat <- 
+          matrix(unlist(sim_profiles[sim, c(grep("_psi", profiles_names))]), 
+                 ncol = 2, byrow = TRUE)
+        
+        parameters_true <- 
+          c(parameters_true, sim_data[[4]][[1]][1:2])
       }
     }
     
@@ -1594,34 +1614,45 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
           g <- unlist(sim_profiles[sim, group_size_col])
         }
         
-        dist_psi_tru <- mlogit.regress.predict.f(rnorm(10^6), psi_betas_mat, B)
-        dist_psi_tru <- t(t(dist_psi_tru) / g)
-        dist_psi_tru <- dist_psi_tru / rowSums(dist_psi_tru)
+        dist_psi_tru <-
+          mlogit.regress.predict.f(rnorm(10 ^ 6), psi_betas_mat, B) %>%
+          {
+            t(t(.) / g)
+          } %>%
+          {
+            . / rowsums(.)
+          }
         
         # In vector 'mix_abs', compute mean values of heterogeneous group probability parameters across predicted values of true species probabilities (psi) and add to 'parameters_true'
+        
         if (B == 2) {
-          mix_abs <- aaply(dist_psi_tru, 1, function(x)
-            tmp_mix * min(x) ^ 2 * max(x) / min(x))
-          mix_abs <- matrix(mix_abs, ncol = 1)
-          colnames(mix_abs) <- "pi.12"
+          
+          mix_abs <- 
+            tmp_mix * rowprods(dist_psi_tru) %>%
+            matrix(., ncol = 1) 
+          
+          mix_name <- "pi_12"
+          
         } else if (B == 3) {
+          
           pairs <- matrix(c(
             1, 2, 1, 3, 2, 3
           ), ncol = 2, byrow = TRUE)
-          mix_abs <- vapply(1:3, function(x)
-            tmp_mix[x] *
-              (pmin(dist_psi_tru[, pairs[x, 1]], dist_psi_tru[, pairs[x, 2]])) ^ 2 *
-              pmax(dist_psi_tru[, pairs[x, 1]], dist_psi_tru[, pairs[x, 2]]) /
-              pmin(dist_psi_tru[, pairs[x, 1]], dist_psi_tru[, pairs[x, 2]])
-            , numeric(dim(dist_psi_tru)[1]))
-          colnames(mix_abs) <- c("pi.12", "pi.13", "pi.23")
+          
+          mix_abs <- 
+            vapply(1:3, function(x)
+              tmp_mix[x] * dist_psi_tru[, pairs[x, 1]] * dist_psi_tru[, pairs[x, 2]],
+              numeric(dim(dist_psi_tru)[1]))
+          
+          mix_name <- c("pi_12", "pi_13", "pi_23")
+          
         }
-        parameters_true <- c(
-          parameters_true, colMeans(mix_abs))
+        parameters_true <- 
+          c(parameters_true, colmeans(mix_abs)) %>%
+          set_names(c(names(parameters_true), mix_name))
       } else {
-        parameters_true <- c(
-          parameters_true, unlist(sim_profiles[sim, mix_col])
-        )
+        parameters_true <-
+          c(parameters_true, unlist(sim_profiles[sim, mix_col]))
       }
     }
     
@@ -1660,7 +1691,7 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
       as.data.frame(foreach(
         i = 1:id_max, 
         .combine = rbind, 
-        .packages = c("plyr", "dplyr", "extraDistr"), 
+        .packages = c("plyr", "dplyr", "extraDistr", "magrittr", "collapse", "Rfast"), 
         .errorhandling = "pass", 
         .options.snow = opts
       ) %dopar% {
@@ -1700,7 +1731,7 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
           as.data.frame(foreach(
             i = 1:length(fail_tmp), 
             .combine = rbind, 
-            .packages = c("plyr", "dplyr", "extraDistr"), 
+            .packages = c("plyr", "dplyr", "extraDistr", "magrittr", "collapse", "Rfast"), 
             .errorhandling = "pass"
           ) %dopar% {
               optim(
@@ -1745,10 +1776,16 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
     # Prefixes on variable names indicate summary statistics: m =  mean, sd = standard deviation, cv = coefficient of variation (sd / mean), me = mean error, rm = residual mean squared error, ci = 95% confidence interval coverage
     
     # Append summary statistics for this distinct model (vector 'output') as new row in data frame 'output_global'
-    parameters_output <- model.results.f(model_results, parameters_true, reps, n_parameters_het)
-    output <- summarise.results.f(parameters_output, parameters_true, reps)
-    names(output) <- output_names
-    output_global <- bind_rows(output_global, data.frame(t(output)))
+    
+    parameters_output <- 
+      model.results.f(model_results, parameters_true, reps, n_parameters_het)
+    
+    output <- 
+      summarise.results.f(parameters_output, parameters_true, reps) %>%
+      setColnames(., output_names)
+    
+    output_global <- 
+      bind_rows(output_global, qDF(t(output)))
     
     # Complete simulation loop for the current distinct model
     reps <- sim_profiles$reps[1]
@@ -1766,7 +1803,8 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
   ## ----- Output & Reports -----
   
   # Combine simulation inputs and outputs, and write 'output_global' as .csv format file to user-specified path
-  output_global <- bind_cols(sim_profiles, output_global)
+  output_global <- add_vars(sim_profiles, output_global)
+  
   try(
     write.csv(output_global, file = out_filename)
   )
@@ -1806,20 +1844,18 @@ if (model == "M") {
   parameters_names_global_true <- parameters_names_global
   
   # Build empty data frame 'output' containing columns for all estimated parameters and associated output 
-  output_global <- matrix(numeric(1), 0, length(parameters_names_global) * 7 + 1) # Summarized simulation output
-  output_names_global <-
-    c(
-      paste0("m.", parameters_names_global_true),
-      paste0("sd.", parameters_names_global_true),
-      paste0("se.", parameters_names_global_true),
-      paste0("cv.", parameters_names_global_true),
-      paste0("me.", parameters_names_global_true),
-      paste0("rm.", parameters_names_global_true),
-      paste0("ci.", parameters_names_global_true),
-      "rep.tru"
-    )
-  colnames(output_global) <- output_names_global
-  output_global <- data.frame(output_global)
+ 
+   output_names_global <-
+    c(paste0(rep(
+      c("m.", "sd.", "se.", "cv.", "me.", "rm.", "ci."),
+      each = length(parameters_names_global_true)
+    ), parameters_names_global_true),
+    "rep.tru")
+  
+  output_global <- 
+    matrix(numeric(1), 0, length(parameters_names_global_true) * 7 + 1) %>%
+    setColnames(., output_names_global) %>%
+    qDF(.)
   
   # Data frame 'sim_profiles_estimation' alters simulation profiles to remove classification parameters not included in the estimation model(s)
   sim_profiles <- mutate(sim_profiles, heterogeneity = 2)
@@ -1866,17 +1902,13 @@ if (model == "M") {
     # Generate initial objects 
     parameters_ini <-
       generate.ini.f(sim_profiles_estimation[sim, ], n_parameters_estimated) # Sets of alternative initial parameter values on each row
+    
     output_names <-
-      c(
-        paste0("m.", parameters_names_true),
-        paste0("sd.", parameters_names_true),
-        paste0("se.", parameters_names_true),
-        paste0("cv.", parameters_names_true),
-        paste0("me.", parameters_names_true),
-        paste0("rm.", parameters_names_true),
-        paste0("ci.", parameters_names_true),
-        "rep.tru"
-      )
+      c(paste0(rep(
+        c("m.", "sd.", "se.", "cv.", "me.", "rm.", "ci."),
+        each = length(parameters_names_true)
+      ), parameters_names_true),
+      "rep.tru")
     
     # Vector 'constraints_low' contains lower constraints for each parameter
     constraints_low <- c(rep(constraints_logit[1], n_parameters_estimated[3]), 
@@ -1887,7 +1919,10 @@ if (model == "M") {
     constraints_up <- Inf
     
     # List 'sim_data' contains formatted simulated survey observations generated using the true model (i.e. with distinct secondary observers) and (if needed) a keyed table of unique groups records
-    sim_data <- generate.simulation.data.f(sim_profiles[sim, ]) 
+    
+    sim_data <- 
+      generate.simulation.data.f(sim_profiles[sim, ]) 
+    
     parameters_index <- 1 # Index for set of values used as initial parameters for optimization
     
     # ----- Model Optimization -----
@@ -1907,7 +1942,7 @@ if (model == "M") {
         foreach(
           i = 1:id_max,
           .combine = rbind,
-          .packages = c("plyr", "dplyr"),
+          .packages = c("plyr", "dplyr", "extraDistr", "magrittr", "collapse", "Rfast"),
           .errorhandling = "pass",
           .options.snow = opts
         ) %dopar% {
@@ -1951,7 +1986,7 @@ if (model == "M") {
             foreach(
               i = 1:length(fail_tmp),
               .combine = rbind,
-              .packages = c("plyr", "dplyr"),
+              .packages = c("plyr", "dplyr", "extraDistr", "magrittr", "collapse", "Rfast"),
               .errorhandling = "pass"
             ) %dopar% {
               optim(
@@ -2021,9 +2056,10 @@ if (model == "M") {
       model.results.het.s.f(model_results, parameters_true, reps, n_parameters, n_parameters_estimated, parameters_duplicate)
     
     output <-
-      summarise.results.f(parameters_output, parameters_true, reps)
-    names(output) <- output_names
-    output_global <- bind_rows(output_global, data.frame(t(output)))
+      summarise.results.f(parameters_output, parameters_true, reps) %>%
+      setColnames(., output_names)
+    
+    output_global <- bind_rows(output_global, qDF(t(output)))
     
     # For long simulation runs, guard against data loss by periodically writing results to temporary file on hard drive 
     if (unclass(Sys.time()) - t_loop > 900) {
@@ -2046,9 +2082,10 @@ if (model == "M") {
   # ----- Output & Reports -----
   
   # Upon completing simulations, combine simulation inputs and outputs, and write 'output' as .csv file format text file to user-specified path
-  output_global <- bind_cols(sim_profiles, output_global)
-  try(write.csv(output_global, file = out_filename)
-      
+  output_global <- add_vars(sim_profiles, output_global)
+  
+  try(
+    write.csv(output_global, file = out_filename)
   )
   
   # With random seed assigned, export simulation data
@@ -2087,20 +2124,18 @@ n_parameters_output_global <- c(0, 0, (B - 1), length(parameters_group_size), 0)
 parameters_names_output_global <- c(parameters_names_global[c(parameters_psi, parameters_group_size)])
 
 # Build empty data frame 'output_global' containing columns for global estimated parameters (across all simulations) and associated output 
-output_global <- matrix(0, 0, sum(n_parameters_output_global) * 7 + 1)
+
 output_names_global <-
-  c(
-    paste0("m.", parameters_names_output_global),
-    paste0("sd.", parameters_names_output_global),
-    paste0("se.", parameters_names_output_global),
-    paste0("cv.", parameters_names_output_global),
-    paste0("me.", parameters_names_output_global),
-    paste0("rm.", parameters_names_output_global),
-    paste0("ci.", parameters_names_output_global),
-    "rep.tru"
-  )
-colnames(output_global) <- output_names_global
-output_global <- data.frame(output_global)
+  c(paste0(rep(
+    c("m.", "sd.", "se.", "cv.", "me.", "rm.", "ci."),
+    each = length(parameters_names_global)
+  ), parameters_names_global),
+  "rep.tru")
+
+output_global <- 
+  matrix(numeric(1), 0, length(parameters_names_global) * 7 + 1) %>%
+  setColnames(., output_names_global) %>%
+  qDF(.)
 
 # Loop for sequentially executing simulations for distinct models on each row of 'sim_profiles'
 for (sim in 1:dim(sim_profiles)[1]) {
@@ -2259,16 +2294,11 @@ for (sim in 1:dim(sim_profiles)[1]) {
   } # End of summary loop
   
   output_names <-
-    c(
-      paste0("m.", parameters_names_output),
-      paste0("sd.", parameters_names_output),
-      paste0("se.", parameters_names_output),
-      paste0("cv.", parameters_names_output),
-      paste0("me.", parameters_names_output),
-      paste0("rm.", parameters_names_output),
-      paste0("ci.", parameters_names_output),
-      "rep.tru"
-    )
+    c(paste0(rep(
+      c("m.", "sd.", "se.", "cv.", "me.", "rm.", "ci."),
+      each = length(parameters_names)
+    ), parameters_names),
+    "rep.tru")
   
   names(output) <- output_names
   
