@@ -1,5 +1,5 @@
 # optimization_functions.R
-# Functions for likelihood optimization of models estimating uncertain identification using multi-observer methods, version 1.2.1
+# Functions for likelihood optimization of models estimating uncertain identification using multi-observer methods, version 1.2.2
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code for optimizing multi-observation method (MOM) and single-observation method (SOM) models for estimating uncertain species identification by minimizing the -log(likelihood). These functions are designed to conduct simulation analyses described in the companion article and Appendices S1 to S3. Each function optimizes models with differing predictive covariates, as described in comments of each function and in MetadataS3.pdf. Code developed and tested in R version 4.1.
@@ -495,8 +495,8 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
       
       theta_arr <- array(0, dim = c(4, n_unique, 5))
       for (obs in 1:2) {
-        theta_arr[c(3, 1), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[1, , obs, drop = FALSE], A))
-        theta_arr[c(2, 4), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[2, , obs, drop = FALSE], A))
+        theta_arr[c(3, 1), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[1, , obs, drop = FALSE]))
+        theta_arr[c(2, 4), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[2, , obs, drop = FALSE]))
       }
 
     }else {
@@ -518,8 +518,8 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
     }
     
     for (obs in 1:2) {
-      theta_arr[c(3, 5, 1), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , obs + (obs - 1), drop = FALSE], A))
-      theta_arr[c(2, 6, 4), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , obs * 2, drop = FALSE], A))
+      theta_arr[c(3, 5, 1), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , obs + (obs - 1), drop = FALSE]))
+      theta_arr[c(2, 6, 4), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , obs * 2, drop = FALSE]))
     }
   }
 }else if (B == 3 & A == 3) {
@@ -543,9 +543,9 @@ optimize.M.theta.f <- function(param, dat, keys, sim_profile){
   }
   
   for (obs in 1:2) {
-    theta_arr[c(4, 7, 1), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , 1, obs, drop = FALSE], A))
-    theta_arr[c(2, 8, 5), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , 2, obs, drop = FALSE], A))
-    theta_arr[c(3, 6, 9), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , 3, obs, drop = FALSE], A))
+    theta_arr[c(4, 7, 1), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , 1, obs, drop = FALSE]))
+    theta_arr[c(2, 8, 5), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , 2, obs, drop = FALSE]))
+    theta_arr[c(3, 6, 9), , obs] <- t(mlogit.regress.predict.f(theta_cov[obs, ], betas_arr[, , 3, obs, drop = FALSE]))
   }
 }
   
@@ -868,8 +868,8 @@ optimize.M.theta.p.f <- function(param, dat, sim_profile){
       
       theta_arr <- array(0, dim = c(4, n_unique, 4))
       
-      theta_arr[c(3, 1), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[1, , drop = FALSE], A))
-      theta_arr[c(2, 4), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[2, , drop = FALSE], A))
+      theta_arr[c(3, 1), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[1, , drop = FALSE]))
+      theta_arr[c(2, 4), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[2, , drop = FALSE]))
       
       theta_arr[c(1, 3),  , 2] <- c(1 - param_s[1], param_s[1])
       theta_arr[c(2, 4),  , 2] <- c(param_s[2], 1 - param_s[2])
@@ -890,8 +890,8 @@ optimize.M.theta.p.f <- function(param, dat, sim_profile){
       
       theta_arr <- array(0, dim = c(6, n_unique, 4))
       
-      theta_arr[c(3, 5, 1), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 1, drop = FALSE], A))
-      theta_arr[c(2, 6, 4), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 2, drop = FALSE], A))
+      theta_arr[c(3, 5, 1), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 1, drop = FALSE]))
+      theta_arr[c(2, 6, 4), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 2, drop = FALSE]))
       
       theta_arr[c(1, 3, 5),  , 2] <- c(1 - sum(param_s[1:2]), param_s[1:2])
       theta_arr[c(2, 4, 6),  , 2] <- c(param_s[3], 1 - sum(param_s[3:4]), param_s[4])
@@ -912,9 +912,9 @@ optimize.M.theta.p.f <- function(param, dat, sim_profile){
     
     theta_arr <- array(0, dim = c(9, n_unique, 4))
     
-    theta_arr[c(4, 7, 1), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 1, drop = FALSE], A))
-    theta_arr[c(2, 8, 5), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 2, drop = FALSE], A))
-    theta_arr[c(3, 6, 9), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 3, drop = FALSE], A))
+    theta_arr[c(4, 7, 1), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 1, drop = FALSE]))
+    theta_arr[c(2, 8, 5), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 2, drop = FALSE]))
+    theta_arr[c(3, 6, 9), , 1] <- t(mlogit.regress.predict.f(dat$covariate_theta, betas_arr[, , 3, drop = FALSE]))
     
     theta_arr[c(1, 4, 7),  , 2] <- c(1 - sum(param_s[1:2]), param_s[1:2])
     theta_arr[c(2, 5, 8),  , 2] <- c(param_s[3], 1 - sum(param_s[3:4]), param_s[4])
@@ -1190,7 +1190,7 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
   
   if (!is.null(keys) & (any(het_true > 0))) {
     # If key table for observed groups exists and heterogeneous groups present, compute group probabilities for keyed table
-    group_probability_key <- mlogit.regress.predict.f(keys_psi$covariate_psi, psi_betas_mat, B)
+    group_probability_key <- mlogit.regress.predict.f(keys_psi$covariate_psi, psi_betas_mat)
     
     # Compute group probability for the specified heterogeneous group model, assuming "constant model as default
     
@@ -1203,7 +1203,7 @@ optimize.M.psi.f <- function(param, dat, keys, keys_psi, sim_profile){
     group_probability_key <- output[[1]]
   }else{
     # Without key table, compute matrix of group probabilities for unique observation histories
-    group_probability <- mlogit.regress.predict.f(dat$covariate_psi, psi_betas_mat, B)
+    group_probability <- mlogit.regress.predict.f(dat$covariate_psi, psi_betas_mat)
     
     # Compute group probability for the specified heterogeneous group model, assuming "constant model as default
     
@@ -1530,8 +1530,8 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
       
       theta_arr <- array(0, dim = c(4, n_unique, 4))
       for (b in 1:B) {
-        theta_arr[c(3, 1), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[1, , b, drop = FALSE], A))
-        theta_arr[c(2, 4), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[2, , b, drop = FALSE], A))
+        theta_arr[c(3, 1), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[1, , b, drop = FALSE]))
+        theta_arr[c(2, 4), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[2, , b, drop = FALSE]))
       }
     }else{
       # True species states (B) = 2, observation states (A) = 3 
@@ -1543,8 +1543,8 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
                      , dim = c(2, 2, 4))
       
       for (b in 1:B) {
-        theta_arr[c(3, 5, 1), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[, , b + (b - 1), drop = FALSE], A))
-        theta_arr[c(2, 6, 4), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[, , b * 2, drop = FALSE], A))
+        theta_arr[c(3, 5, 1), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[, , b + (b - 1), drop = FALSE]))
+        theta_arr[c(2, 6, 4), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[, , b * 2, drop = FALSE]))
       }
     }
   }
@@ -1566,7 +1566,7 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
       ncol = B)
   
   # Compute matrix of group probabilities for unique observation histories
-  group_probability <- mlogit.regress.predict.f(dat$covariate_psi, psi_betas_mat, B)
+  group_probability <- mlogit.regress.predict.f(dat$covariate_psi, psi_betas_mat)
   
   # Compute group probability for the specified heterogeneous group model
   if (mx_model == "constant") {
@@ -1590,7 +1590,6 @@ optimize.M.theta.psi.f <- function(param, dat, sim_profile){
   
   # 'n_group_size' = count of unique observation histories by group size
   n_group_size <-  
-    n_group_size <-
     fgroup_by(dat, group_size) %>%
     fselect(., "count") %>%
     fnobs(.) 

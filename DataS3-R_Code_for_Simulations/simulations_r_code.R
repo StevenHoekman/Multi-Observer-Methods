@@ -1,5 +1,5 @@
 # simulations_R_code.R
-# Simulation engine for estimating uncertain identification using multi-observer methods, version 1.2.1
+# Simulation engine for estimating uncertain identification using multi-observer methods, version 1.2.2
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code used to conduct "omnibus", "covariate", and "distinct observer" simulation analyses using multi-observer methods. Simulations rely on input in .csv file format (described in DataS2), which can be altered to conduct user-specified simulations. For multiple-observation method (MOM) and single-observation (SOM) method models and 2 to 4 species, code generates and analyzes simulated survey data, with summary output written to .csv format files. Descriptions of statistical methods are provided in the companion article and Appendices S1 to S3. Descriptions of R objects containing simulated survey data ('sim_data'), statistical output ('model_results'), and summarized simulation output ('output_global') are provided in DataS3. Code developed and tested in R version 4.1.
@@ -18,7 +18,7 @@
 ###############################################################################
 
 ## Install and load prior to executing code below
-# library(fastverse)  High-performance statistical computing and data manipulation
+# library(fastverse)  High-performance statistical computing, data manipulation
 #   Utilized fastverse packages are 'collapse', 'matrixStats', & 'magrittr'
 # library(plyr)       Programming tools, data manipulation
 # library(dplyr)      Data frame manipulation
@@ -30,9 +30,9 @@
 
 library(fastverse)
 
-fastverse_detach(data.table, kit)
+fastverse_detach(data.table, kit, fst)
 
-fastverse_extend(plyr, dplyr, extraDistr, nnet, doSNOW, mrds, Rfast)
+fastverse_extend(plyr, dplyr, extraDistr, doSNOW, mrds, Rfast)
 
 ###############################################################################
 #     Register the 'doSNOW' parallel execution back end
@@ -416,7 +416,9 @@ if (model == "M") {
   
   # End of model M analysis loop
   
-} else if (model == "M.theta.p" | model == "M.theta" | model == "M.theta.ps") {
+} else if (model == "M.theta.p" |
+           model == "M.theta" | 
+           model == "M.theta.ps") {
   # ----- MOM/SOM models with covariates predicting classification probabilities (theta) -----
   # True states B = (2 or 3), classification states A = (2 or 3)
   
@@ -895,7 +897,9 @@ if (model == "M") {
   print.error.f(error_msg, converge_fail)
   
   # End of model M.phi analysis loop
-} else if (model == "M.psi" | model == "M.theta.psi" | model == "M.theta+psi") {
+} else if (model == "M.psi" |
+           model == "M.theta.psi" | 
+           model == "M.theta+psi") {
   # ----- MOM/SOM models with covariates predicting true species probabilities (psi) -----
   # true states B = (2 or 3), classification states A = (2 or 3)
   
@@ -1432,7 +1436,11 @@ if (model == "M") {
 
 # Output files include true parameters used to generate data, a column named "heterogeneity" taking value 1, and summary statistics for estimated parameters. For parameters with un-modeled heterogeneity, estimates of mean error and confidence interval coverage are found by comparing estimates to overall means predicted from true parameter values across all covariate values. 
 
-if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.theta.ps") {
+if (model == "M.psi" |
+    model == "M.theta" |
+    model == "M.theta.p" |
+    model == "M.theta.ps") {
+  
   # True states B = (2 or 3), classification states A = (2 or 3)
   
   ## Define global objects (constant across all simulations)
@@ -1615,7 +1623,7 @@ if (model == "M.psi" | model == "M.theta" | model == "M.theta.p" | model == "M.t
         }
         
         dist_psi_tru <-
-          mlogit.regress.predict.f(rnorm(10 ^ 6), psi_betas_mat, B) %>%
+          mlogit.regress.predict.f(rnorm(10 ^ 6), psi_betas_mat) %>%
           {
             t(t(.) / g)
           } %>%
@@ -2110,6 +2118,9 @@ if (model == "M") {
 ###############################################################################
 
 # This routine conducts "omnibus" simulations for multinomial logit models estimating observed species proportions (proportion of each species among individuals classified to species by primary observers), assuming no species misidentification. Data are generated using true parameter values for MOM models, but are analyzed using models that estimates observed species proportions from counts of individuals classified as each species by primary observers. 
+
+# Attach library nnet to previously loaded libraries
+fastverse_extend(nnet)
 
 ## Define global objects (constant across all simulations) 
 

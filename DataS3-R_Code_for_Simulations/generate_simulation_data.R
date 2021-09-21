@@ -1,5 +1,5 @@
 # generate_simulation_data.R
-# Function for generating simulated survey data using multi-observer methods, version 1.2.0
+# Function for generating simulated survey data using multi-observer methods, version 1.2.1
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code for generating simulated survey data for multi-observation method (MOM) and single-observation method (SOM) models. Accepts user-specified inputs for simulation analyses, returns list with 4 elements: 1) formatted simulated survey data, tables of key values (if applicable) for 2) observed groups and 3) binned covariate values, and 4) true values for mean overall true species probabilities and classification probabilities (if applicable). Code developed and tested in R version 4.1.
@@ -240,7 +240,7 @@ if (sim$Model == "M" |
   }
 
   # 'psi.group' contains group probabilities for individual groups
-  psi.group <- mlogit.regress.predict.f(covariate_psi, betas, B)
+  psi.group <- mlogit.regress.predict.f(covariate_psi, betas)
   
   # Group probabilities before accounting for heterogeneous groups
   if (any(g > 1)) {
@@ -615,7 +615,7 @@ if (sim$Model == "M.theta.p" |
         
         # Generate true classification probabilities for each true group from group-level covariate values and regression coefficients
         prob.cov <-
-          mlogit.regress.predict.f(data.obs[1:r[[1]], "covariate_theta"], betas[b, , drop = FALSE], A)[, (3 - b):b]
+          mlogit.regress.predict.f(data.obs[1:r[[1]], "covariate_theta"], betas[b, , drop = FALSE])[, (3 - b):b]
         
         # For observer 'obs', generate 'r' observed groups and place in columns 'y'. Classifications are generated for each individual using random draws from a multinomial distribution with true classification probabilities 'prob.cov' for each true group.
         data.obs[1:r[[1]], y[[1]]] <-
@@ -653,10 +653,10 @@ if (sim$Model == "M.theta.p" |
         # Generate true classification probabilities for each true group from group-level covariate values and regression coefficients
         if (sim$Model == "M.theta.ps") {
           prob.cov <-
-            mlogit.regress.predict.f(data.obs[1:r[[2]], "covariate_theta_s"], betas[b, , drop = FALSE], A)[, (3 - b):b]
+            mlogit.regress.predict.f(data.obs[1:r[[2]], "covariate_theta_s"], betas[b, , drop = FALSE])[, (3 - b):b]
         } else{
           prob.cov <-
-            mlogit.regress.predict.f(data.obs[1:r[[2]], "covariate_theta"], betas[b, , drop = FALSE], A)[, (3 - b):b]
+            mlogit.regress.predict.f(data.obs[1:r[[2]], "covariate_theta"], betas[b, , drop = FALSE])[, (3 - b):b]
         }
         
         # Loop for observers
@@ -701,7 +701,7 @@ if (sim$Model == "M.theta.p" |
     for (b in 1:B) {
       # Generate true classification probabilities for each true group from group-level covariate values and regression coefficients
       prob.cov <- 
-        mlogit.regress.predict.f(data.obs[1:r[[1]], "covariate_theta"], betas[, , b, drop = FALSE], A)[, col.b[[b]]]
+        mlogit.regress.predict.f(data.obs[1:r[[1]], "covariate_theta"], betas[, , b, drop = FALSE])[, col.b[[b]]]
       
       # For observer 'obs', generate 'r' observed groups and place in columns 'y'. Classifications are generated for each individual using random draws from a multinomial distribution with true classification probabilities 'prob.cov' for each true group.
 
@@ -739,10 +739,10 @@ if (sim$Model == "M.theta.p" |
         # Generate true classification probabilities for each true group from group-level covariate values and regression coefficients
         if (sim$Model == "M.theta.ps") {
           prob.cov <-
-            mlogit.regress.predict.f(data.obs[1:r[[2]], "covariate_theta_s"], betas[, , b, drop = FALSE], A)[, col.b[[b]]]
+            mlogit.regress.predict.f(data.obs[1:r[[2]], "covariate_theta_s"], betas[, , b, drop = FALSE])[, col.b[[b]]]
         } else{
           prob.cov <-
-            mlogit.regress.predict.f(data.obs[1:r[[2]], "covariate_theta"], betas[, , b, drop = FALSE], A)[, col.b[[b]]]
+            mlogit.regress.predict.f(data.obs[1:r[[2]], "covariate_theta"], betas[, , b, drop = FALSE])[, col.b[[b]]]
         }
         
       # Loop for observer
@@ -787,7 +787,7 @@ if (sim$Model == "M.theta.p" |
     for (b in 1:B) {
       # Generate true classification probabilities for each true group from group-level covariate values and regression coefficients
       prob.cov <- 
-        mlogit.regress.predict.f(data.obs[1:r[[1]], "covariate_theta"], betas[, , b, drop = FALSE], A)[, col.b[[b]]]
+        mlogit.regress.predict.f(data.obs[1:r[[1]], "covariate_theta"], betas[, , b, drop = FALSE])[, col.b[[b]]]
       
       # For observer 'obs', generate 'r' observed groups and place in columns 'y'. Classifications are generated for each individual using random draws from a multinomial distribution with true classification probabilities 'prob.cov' for each true group.
       
@@ -826,10 +826,10 @@ if (sim$Model == "M.theta.p" |
         # Generate true classification probabilities for each true group from group-level covariate values and regression coefficients
         if (sim$Model == "M.theta.ps") {
           prob.cov <-
-            mlogit.regress.predict.f(data.obs[1:r[[1]], "covariate_theta_s"], betas[, , b, drop = FALSE], A)[, col.b[[b]]]
+            mlogit.regress.predict.f(data.obs[1:r[[1]], "covariate_theta_s"], betas[, , b, drop = FALSE])[, col.b[[b]]]
         } else{
           prob.cov <-
-            mlogit.regress.predict.f(data.obs[1:r[[1]], "covariate_theta"], betas[, , b, drop = FALSE], A)[, col.b[[b]]]
+            mlogit.regress.predict.f(data.obs[1:r[[1]], "covariate_theta"], betas[, , b, drop = FALSE])[, col.b[[b]]]
         }
         
         # Loop for observer

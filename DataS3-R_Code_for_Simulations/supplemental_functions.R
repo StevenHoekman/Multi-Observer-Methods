@@ -1,5 +1,5 @@
 # Supplemental_functions.R
-# Supplemental functions for analyses and summaries, version 1.2.0
+# Supplemental functions for analyses and summaries, version 1.2.1
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code with supplemental functions for simulation analyses for estimating uncertain identification using multi-observer methods. These functions provide supplemental services such as: drawing random samples from probability distributions; computing probabilities and other values used in likelihood computations; and generating, formatting, summarizing, and error-checking simulation data and statistical output. Functions are grouped according by purpose. Comments with each function describe its purpose, inputs and outputs, and functioning of the code. Code developed and tested in R version 4.1.
@@ -61,7 +61,9 @@ mlogit.dist.f <- function(beta) {
   r <- rnorm(10^7.3)
   
   # Linear predictors for each logit regression
-  predict <- t(apply(beta, 1, function(x) exp(x[1] + x[2] * r)))
+  predict <-
+    t(vapply(1:dim(beta)[1], function(x)
+      exp(beta[x, 1] + beta[x, 2] * r), numeric(length(r)) ))
   
   # Compute distribution of predicted values by category
   distribution <- 
@@ -75,9 +77,9 @@ mlogit.dist.f <- function(beta) {
   distribution
 }
 
-# Function: {mlogit.regress.predict.f} Predicts probabilities for multinomial logistic regression. Accepts input of vector of covariate values 'r', a matrix of beta parameters 'beta' (columns for intercept and slope, rows for each logit regression equation), and vector with number of categories 'n'. Returns a matrix with category-specific (columns 1 to 'n') predicted probabilities for each covariate value (rows).
+# Function: {mlogit.regress.predict.f} Predicts probabilities for multinomial logistic regression. Accepts input of vector of covariate values 'cov_mat' and a matrix of beta parameters 'beta_mat' (columns for intercept and slope, rows for each logit regression equation). Returns a matrix with category-specific (columns 1 to 'n') predicted probabilities for each covariate value (rows).
 
-mlogit.regress.predict.f <- function(cov_mat, beta_mat, n) {
+mlogit.regress.predict.f <- function(cov_mat, beta_mat) {
   
   # tidy up the inputs to matrices with 2 covariates, 3 beta parameters
   
@@ -98,8 +100,10 @@ mlogit.regress.predict.f <- function(cov_mat, beta_mat, n) {
   # Compute distribution of predicted values by category
   
   distribution <-
-    t(apply(beta_mat, 1, function(b)
-      exp(b[1] + b[2] * cov_mat[, 1] + b[3] * cov_mat[, 2]))) %>%
+    t(vapply(1:dim(beta_mat)[1], function(b)
+      exp(beta_mat[b, 1] + beta_mat[b, 2] * cov_mat[, 1] + 
+            beta_mat[b, 3] * cov_mat[, 2]), 
+      numeric(dim(cov_mat)[1]) )) %>%
     {
       . %r/% (1 + fsum(.))
     } %>%
@@ -124,12 +128,15 @@ group.observed.cprobability.f <- function(d, p, states, s){
   
   # For each combination of true states (possible true groups) and each permutation of possible observation states, compute probabilities by 1) raising classification probabilities to the power of the number of classifications in corresponding observation states and 2) then multiplying by the multinomial coefficient for each permutation.
   # For observed group 'd', matrix 't1' contains an 'index' value corresponding to each possible true group, a multinomial coefficient term 'coefficient', and additional columns containing vectors representing permutations of classifications giving rise to each observed group.
-  t1 <- likelihood.equations[[paste0("observed.", paste0(d, collapse = "."))]]
-  t2 <- apply(t1[-(1:2)], 1, function(z) prod(p ^ z))
-  t2 <- t2 * t1[[2]]
-  
+
   # Compute overall probabilities for possible true groups by summing across permutations of observation states in the observed group with identical index values
-  vapply(1:max(t1[[1]]), function(x) sum(t2[which(t1[[1]] == x)]), numeric(1))  
+  
+  t1 <- qM(likelihood.equations[[paste0("observed.", paste0(d, collapse = "."))]])
+  
+  t2 <-
+    dapply(t1[, -1], MARGIN = 1, function(z)
+      prod(p ^ z[-1] , z[1])) %>%
+    fsum(., t1[, 1]) 
 }
 
 # Function: {group.observed.cprobability.homogeneous.f} Computes conditional (on true group) probabilities for group records with homogeneous groups. Accepts inputs of a group record 'd', a vector of classification probabilities 'p', and the number of possible combinations (with repetition) of true groups 'states', and group size 's'. Returns vector with conditional probabilities for each possible true group. Relies on external 'likelihood.equations' list objects.
@@ -140,12 +147,19 @@ group.observed.cprobability.homogeneous.f <- function(d, p, states, s){
   
   # For each of 2 possible true groups and each permutation of possible observation states, compute probabilities by 1) raising classification probabilities to the power of the number of classifications in corresponding observation states and 2) then multiplying by the multinomial coefficient for each permutation.
   # For observed group 'd', matrix 't1' contains an 'index' value corresponding to each possible true group, a multinomial coefficient term 'coefficient', and additional columns containing vectors representing permutations of classifications giving rise to each observed group.
-  t1 <- likelihood.equations[[paste0("observed.", paste0(d, collapse = "."))]]
+  
+  t1 <- qM(likelihood.equations[[paste0("observed.", paste0(d, collapse = "."))]])
+  
   # Row numbers in 'homogeneous' exclude heterogeneous groups 
-  homogeneous <- which(likelihood.equations[[paste0("true.permutations.count.g.", s)]] == 1)
-  homogeneous <- vapply(homogeneous, function(x) which(t1$index == x), numeric(1))
-  t2 <- apply(t1[homogeneous, -(1:2)], 1, function(z) prod(p ^ z))
-  t2 <- t2 * t1[homogeneous, 2]
+  
+  homogeneous <- 
+    which(likelihood.equations[[paste0("true.permutations.count.g.", s)]] == 1) %>%
+    vapply(., function(x) which(t1[, 1] == x), numeric(1)) 
+  
+  t2 <-
+    dapply(t1[homogeneous, -1], MARGIN = 1, function(z)
+      prod(p ^ z[-1] , z[1])) %>%
+    fsum(., t1[homogeneous, 1])
 }
 
 # Function: {multinom.likelihood.f} Computes likelihood for multinomial data with no covariates. Used for the multinomial models  estimating observed species proportions assuming no misidentification. Accepts input of vector with counts for observation classes (1 to A), returns 'multinom' model object.  
@@ -181,13 +195,6 @@ sum1.f <- function(x) {(x / sum(x)) * 0.999}
 # Function: {penalty.f} Penalty function to -log(likelihood) when sum of probabilities >1. Accepts vector of probabilities and returns vector with penalty term that scales with the sum. 
 penalty.f <- function(x) {2000 * (sum(x - 1) + 0.0001) ^ 2}
 
-# Function: {psi.table.f} With 2 species, computes product of true species probabilities (psi) for specified group size and possible true groups. Accepts vector inputs of group size 'g' and true species probabilities 'psi', and returns probabilities of each possible true group. Relies on external 'likelihood.equations' list to provide possible true groups.
-
-psi.table.f <- function(g, psi){
-  tmp <- as.matrix(likelihood.equations[[paste("true.combinations.g.", g, sep = "")]])
-  apply(tmp, 1, function(x, psi) prod(psi[x]), psi)
-}
-
 # Function: {group.true.probability.key.f}: With heterogeneous groups (composed of species pairs) for 2 or 3 species, computes probabilities for all possible true groups. Accepts inputs of group probabilities 'group_probability', probability mass of group sizes (1 to maximum observed group size) for each species 'size_probability', and observed group sizes 'size'. Returns list with named elements for each group size composed of a vector with probabilities for each possible true group. For true species states = 3, relies on external 'likelihood.equations' list to provide possible true groups.
 
 group.true.probability.key.f <- function(group_probability, size_probability, size){
@@ -199,36 +206,44 @@ group.true.probability.key.f <- function(group_probability, size_probability, si
     # True species states B = 2
     
     # Compute probabilities for homogeneous groups at the start/end of each vector, then add probabilities for heterogeneous groups with decreasing/increasing numbers of species 1/species 2
-    homogeneous <-
-      vapply(1:B, function(x)
-        group_probability[x] * size_probability[size, x], numeric(length(size)))
-    output <- lapply(size, function(x) c(
-      homogeneous[which(size == x) , 1],
-      group_probability[3] * size_probability[0:(x - 1), 2] * size_probability[(x - 1):0, 1],
-      homogeneous[which(size == x) , 2]
-    ))
-    
     # Name vector elements with count of species 1/species 2
-    names(output) <- paste(size)
-    for (i in 1:length(size)) {
-      names(output[[paste0(size[i])]]) <- paste0(size[i]:0, 0:size[i])
-    }
+    
+    output <-
+      vapply(1:B, function(x)
+        group_probability[x] * size_probability[size, x], numeric(length(size))) %>%
+      {
+        lapply(size, function(x)
+          c(
+            .[which(size == x) , 1],
+            group_probability[3] * size_probability[0:(x - 1), 2] * size_probability[(x - 1):0, 1],
+            .[which(size == x) , 2]
+          ))
+      } %>%
+      {
+        lapply(1:length(.), function(x)
+          setColnames(.[[x]], paste0(size[x]:0, 0:size[x])))
+      } %>%
+      setColnames(., paste(size))
+    
   }else if (BB == 3) {
     # True species states B = 3
     
     # Add probability = 1 for group size = max(group size) + 1
-    size_probability <- rbind(size_probability, 1)
-    rownames(size_probability) <- NULL
+    size_probability <- 
+      rbind(size_probability, 1) %>%
+      setRownames(., NULL)
     
     # Add extra vector elements with group probability = 0 for heterogeneous groups with 3 species (assumed to not occur)
     group_probability <- c(group_probability, 0, 0)
     
     # List 'counts' contains a matrix for each group size with the count of each species in possible true groups (from 'likelihood.equations') on each row
-    true.states <- lapply(size, function(x) likelihood.equations[[paste0("true.combinations.g.", x)]])
-    counts <- lapply(true.states, function(x)
-      vapply(1:B, function(y)
-        apply(x, 1, function(z)
-          sum(z == y)), integer(dim(x)[1])))
+    counts <-
+      lapply(size, function(x)
+        likelihood.equations[[paste0("true.combinations.g.", x)]]) %>%
+      lapply(., function(x)
+        vapply(1:B, function(y)
+          apply(x, 1, function(z)
+            sum(z == y)), integer(dim(x)[1])))
     
     # Counts of each species in each true group
     labels.spp <- NULL
@@ -238,20 +253,24 @@ group.true.probability.key.f <- function(group_probability, size_probability, si
     }
     
     # Each vector in 'index.group' corresponds to matrices in 'counts', with vector elements containing the position of the group probability in 'group_probability' for the true group on each row. Heterogeneous groups with 3 species receive index values corresponding to group probability = 0. 
-    index.group <- lapply(counts, function(x)
-      apply(x, 1, function(y)
-        sum((y > 0) * 1:B) + sum(y > 0) - 1))
+    index.group <- 
+      lapply(counts, function(x)
+        apply(x, 1, function(y)
+          sum((y > 0) * 1:B) + sum(y > 0) - 1))
     
     # Index locations in each matrix with value = 0, replace 0's with value = max(group size) + 1
-    counts.z <- lapply(counts, function(x) which(x == 0))
+    counts.z <- 
+      lapply(counts, function(x) which(x == 0))
+    
     for (i in 1:length(size)) {
       counts[[i]][counts.z[[i]]] <- max(size) + 1
     }
     
     # Insert into matrices probability of groups of specified sizes for each species. Groups of size  = max(size) + 1 (representing groups of 0) get probability = 1 so these don't contribute to probabilities. 
-    prob.mat <- lapply(counts, function(y)
-      vapply(1:B, function(z) size_probability[y[, z] , z], numeric(dim(y)[1]))
-    )
+    prob.mat <-
+      lapply(counts, function(y)
+        vapply(1:B, function(z)
+          size_probability[y[, z] , z], numeric(dim(y)[1])))
 
     # Use 'index.group' to append group probabilities for each possible true group
     for (i in 1:length(size)) {
@@ -260,15 +279,14 @@ group.true.probability.key.f <- function(group_probability, size_probability, si
     }
     
     # Calculate probability of each true group as row products
-    output <- lapply(prob.mat, function(x)
-      apply(x, 1, prod)
-    )
-    
-    # Add group size and count of each species for true groups
-    for (i in 1:length(size)) {
-      names(output[[i]]) <- labels.spp[[i]]
-    }
-    names(output) <- paste(size)
+    output <-
+      lapply(prob.mat, function(x)
+        rowprods(x)) %>%
+      {
+        lapply(1:length(.), function(x)
+          setColnames(.[[x]], labels.spp[[x]] ))
+      } %>%
+      setColnames(., paste(size))
   }
   output
 }
@@ -283,6 +301,7 @@ group.true.probability.f <- function(group_probability, size_probability, size){
     homogeneous <-
       vapply(1:B, function(x)
         group_probability[x] * size_probability[size, x], numeric(length(size)))
+    
     output <- c(homogeneous[1],
                 group_probability[3] * size_probability[0:(size - 1), 2] * size_probability[(size - 1):0, 1],
                 homogeneous[2])
@@ -416,7 +435,7 @@ group.probability.psi.constant.f <- function(p, m, g) {
   # For all models, compute group probabilities (pi) for each unique observation history from true species probabilities 'p' (psi) accounting for mean group sizes
   if (any(g > 1)) {
     p <- t(t(p) / g)
-    pi <- p / rowSums(p)
+    pi <- p / rowsums(p)
   }else{
     pi <- p
   }
@@ -504,7 +523,7 @@ group.probability.psi.encounter.f <- function(p, m, g) {
   # For all models, compute group probabilities (pi) for each unique observation history from true species probabilities 'p' (psi) accounting for mean group sizes
   if (any(g > 1)) {
     p <- t(t(p) / g)
-    pi <- p / rowSums(p)
+    pi <- p / rowsums(p)
   }else{
     pi <- p
   }
@@ -551,11 +570,11 @@ group.probability.psi.encounter.f <- function(p, m, g) {
       
       zeta[, 1:3] <- vapply(1:3, function(x)
         delta[, x] -
-          rowSums(zeta[, B + pairs[x, ]])
+          rowsums(zeta[, B + pairs[x, ]])
         , numeric(dim(zeta)[1]))
       
       # Calculate group probabilities (pi) for each species (pi.1, pi.2, pi.3) and heterogeneous groups (p.12, pi.13, pi.23) for each unique observation record
-      pi <- zeta / (1 - rowSums(zeta[, 4:6]))
+      pi <- zeta / (1 - rowsums(zeta[, 4:6]))
 
       # epsilon <- sum(m)
       # pairs <- matrix(c(1, 2, 1, 3, 2, 3), ncol = 2, byrow = TRUE)
@@ -631,9 +650,9 @@ theta.calc.f <- function(B.max, B , A) {
 # Function: {generate.sim.profiles.f} Combines simulation inputs into single data frame with one row for each distinct model. Accepts inputs of simulation parameters common across models 'const' and simulation parameters unique to each model 'var', returns formatted data frame. 
 
 generate.sim.profiles.f <- function(const, var) {
-  tmp <- as_tibble(const[1:length(const)])
-  tmp[1:dim(var)[1], ] <- const
-  tmp <- bind_cols(tmp, var)
+  
+  qTBL(const[1:length(const)]) %>%
+    {add_vars(.[rep(1, dim(var)[1]), ], var)}
 } 
 
 # Function: {sim.const.f} Formats list of simulation parameters 'sim.const' common across models, removing empty and blank entries.
@@ -862,7 +881,7 @@ generate.keys.theta.f <- function(dat, obs, A) {
       d[, c(col[x,], col.cov)]),
       qDF(matrix(
         0L, ncol = A, dimnames = list(c(), paste0("A_", 1:A))
-      ))) %>%
+      )) ) %>%
     funique(.) %>%
     arrange_all(.) %>%
     ftransform(., key = 1:dim(.)[1]) %>%
@@ -1052,13 +1071,13 @@ psi.est.f <- function(par, dat, n_parameters) {
       
       psi.mean <-
         dat %>%
-        mutate(.,
-               psi.1 = count * mlogit.regress.predict.f(covariate_psi , par[1:2], B)[, 1]
-        ) %>%
-        summarise(.,
-                  psi.1 = sum(psi.1) / sum(count),
-                  psi.2 = 1 - psi.1
-        )
+        ftransform(., 
+                   psi.1 = count * mlogit.regress.predict.f(covariate_psi , par[1:2])[, 1]) %>%
+        fselect(., psi.1, count) %>%
+        fsum(., , drop = FALSE) %>%
+        fcompute(., 
+                 psi.1 = psi.1 / count,
+                 psi.2 = 1 - (psi.1 / count))
       
     } else if (n_parameters[5] == 0) {
       # Homogeneous groups
@@ -1070,19 +1089,22 @@ psi.est.f <- function(par, dat, n_parameters) {
       
       psi.mean <- 
         dat %>%
-        mutate(., 
-               psi.1 = mlogit.regress.predict.f(covariate_psi , par[1:2], B)[, 1], 
-               psi.2 = 1 - psi.1, 
-               delta.1 = psi.1 / par.g[1], 
-               delta.2 = psi.2 / par.g[2], 
-               prob.g.1 = delta.1 / (delta.1 + delta.2), 
-               prob.g.2 = delta.2 / (delta.1 + delta.2)
-        ) %>%
-        summarise(.,
-                  psi.1 = (
-                    mean(prob.g.1 * count) * par.g[1]) / (mean(prob.g.1 * count) * par.g[1] + mean(prob.g.2 * count) * par.g[2]), 
-                  psi.2 = 1 - psi.1
-        ) 
+        ftransform(., 
+                   psi.1 = mlogit.regress.predict.f(covariate_psi , par[1:2])[, 1]) %>%
+        ftransform(.,
+                   psi.2 = 1 - psi.1) %>%
+        ftransform(., 
+                   delta.1 = psi.1 / par.g[1], 
+                   delta.2 = psi.2 / par.g[2]) %>%
+        fcompute(., 
+                 prob.g.1 = (delta.1 / (delta.1 + delta.2)) * count, 
+                 prob.g.2 = (delta.2 / (delta.1 + delta.2)) * count
+        ) %>% 
+        fmean(., , drop = FALSE) %>%
+        fcompute(., 
+                 psi.1 = prob.g.1 * par.g[1] / (prob.g.1 * par.g[1] + prob.g.2 * par.g[2] ),
+                 psi.2 = 1 - (prob.g.1 * par.g[1] / (prob.g.1 * par.g[1] + prob.g.2 * par.g[2]) ))
+         
     } else {
       # Heterogeneous groups 
       
@@ -1096,25 +1118,29 @@ psi.est.f <- function(par, dat, n_parameters) {
       
       psi.mean <- 
         dat %>%
-        mutate(., 
-               psi.1 = mlogit.regress.predict.f(covariate_psi , par[1:2], B)[, 1], 
-               psi.2 = 1 - psi.1,
-               delta.1 = psi.1 / par.g[1], 
-               delta.2 = psi.2 / par.g[2], 
-               prob.g.1 = delta.1 / (delta.1 + delta.2), 
-               prob.g.2 = delta.2 / (delta.1 + delta.2), 
-               prob.g.3 = (par.mix * pmin(prob.g.1, prob.g.2)^2 * pmax(prob.g.1, prob.g.2)) / pmin(prob.g.1, prob.g.2),
-               prob.g.1 = (prob.g.1 - prob.g.3) / (1 - prob.g.3),
-               prob.g.2 = (prob.g.2 - prob.g.3) / (1 - prob.g.3),
-               prob.g.3 = prob.g.3 / (1 - prob.g.3)
+        ftransform(., 
+                   psi.1 = mlogit.regress.predict.f(covariate_psi , par[1:2])[, 1]) %>%
+        ftransform(., 
+                   psi.2 = 1 - psi.1) %>%
+        ftransform(., 
+                   delta.1 = psi.1 / par.g[1], 
+                   delta.2 = psi.2 / par.g[2]) %>%
+        ftransform(., 
+                   prob.g.1 = delta.1 / (delta.1 + delta.2), 
+                   prob.g.2 = delta.2 / (delta.1 + delta.2)) %>%
+        ftransform(., 
+                   prob.g.3 = (par.mix * pmin(prob.g.1, prob.g.2)^2 * pmax(prob.g.1, prob.g.2)) / pmin(prob.g.1, prob.g.2)) %>%
+        fcompute(., 
+                 prob.g.1 = ((prob.g.1 - prob.g.3) / (1 - prob.g.3)) * count,
+                 prob.g.2 = ((prob.g.2 - prob.g.3) / (1 - prob.g.3)) * count,
+                 prob.g.3 = (prob.g.3 / (1 - prob.g.3)) * count
         ) %>%
-        summarise(.,
-                  psi.1 = (
-                    (mean(prob.g.1 * count) * par.g[1] + mean(prob.g.3 * count) * par.g[1])
-                    / (mean(prob.g.1 * count) * par.g[1] + mean(prob.g.2 * count) * par.g[2] + mean(prob.g.3 * count) * sum(par.g))
-                  ),
-                  psi.2 = 1 - psi.1
-        )
+        fmean(., , drop = FALSE) %>%
+        fcompute(., 
+                 psi.1 = ( prob.g.1 * par.g[1] + prob.g.3 * par.g[1] )  / 
+                   ( prob.g.1 * par.g[1] + prob.g.2 * par.g[2] + prob.g.3 * sum(par.g) ),
+                 psi.2 = 1 -  ( prob.g.1 * par.g[1] + prob.g.3 * par.g[1] )  / 
+                   ( prob.g.1 * par.g[1] + prob.g.2 * par.g[2] + prob.g.3 * sum(par.g) ))
     }
   }
   
@@ -1125,11 +1151,11 @@ psi.est.f <- function(par, dat, n_parameters) {
       # Group size = 1
 
       # Estimate realized true species probabilities (psi) for each covariate value 'tmp' and overall mean for the model 'psi.mean'
-      tmp <- dat$count * mlogit.regress.predict.f(dat$covariate_psi , par[1:4], B)
+      tmp <- dat$count * mlogit.regress.predict.f(dat$covariate_psi , par[1:4])
       
       psi.mean <- 
         dat %>%
-        mutate(., 
+        ftransform(., 
                psi.1 = tmp[, 1],
                psi.2 = tmp[, 2]
         ) %>%
@@ -1145,7 +1171,7 @@ psi.est.f <- function(par, dat, n_parameters) {
       par.g <- par[1:3 + sum(n_parameters[1:3])]
       
       # Estimate realized true species probabilities (psi) for each covariate value 'tmp' and overall mean for the model 'psi.mean'
-      tmp <- mlogit.regress.predict.f(dat$covariate_psi , par[1:4], B)
+      tmp <- mlogit.regress.predict.f(dat$covariate_psi , par[1:4])
       
       psi.mean <- 
         dat %>%
@@ -1179,7 +1205,7 @@ psi.est.f <- function(par, dat, n_parameters) {
       par.mix <- par[1:3 + sum(n_parameters[1:4])]
       
       # Estimate realized true species probabilities (psi) for each covariate value 'tmp' and overall group probabilities before mixing 'delta'
-      tmp <- mlogit.regress.predict.f(dat$covariate_psi , par[1:4], B)
+      tmp <- mlogit.regress.predict.f(dat$covariate_psi , par[1:4])
       
       delta <- as.matrix(
         dat %>%
@@ -1212,13 +1238,14 @@ psi.est.f <- function(par, dat, n_parameters) {
           pmax(delta[, pairs[x, 1]], delta[, pairs[x, 2]]) /
           pmin(delta[, pairs[x, 1]], delta[, pairs[x, 2]])
         , numeric(dim(zeta)[1]))
+      
       zeta[, 1:3] <- vapply(1:3, function(x)
         delta[, x] -
-          rowSums(zeta[, B + pairs[x, ]])
+          rowsums(zeta[, B + pairs[x, ]])
         , numeric(dim(zeta)[1]))
       
       # Calculate group probabilities (pi) for homogeneous and heterogeneous groups for each unique observation history
-      psi.mean <- zeta / (1 - rowSums(zeta[, 4:6]))
+      psi.mean <- zeta / (1 - rowsums(zeta[, 4:6]))
       colnames(psi.mean) <- c(paste0("prob.g.", 1:B), "prob.g.12", "prob.g.13", "prob.g.23")
       dat <- bind_cols(dat, as_tibble(psi.mean))
       
@@ -1270,11 +1297,11 @@ theta.est.f <- function(par, dat) {
       # Estimate overall mean for classification probabilities
       theta.mean <-
         dat %>%
-        mutate(.,
-               theta.p.21 = count * group_size * mlogit.regress.predict.f(covariate_theta , par.beta[1, ], A)[, 1],
-               theta.p.12 = count * group_size * mlogit.regress.predict.f(covariate_theta , par.beta[2, ], A)[, 1],
-               theta.s.21 = count * group_size * mlogit.regress.predict.f(covariate_theta , par.beta[3, ], A)[, 1],
-               theta.s.12 = count * group_size * mlogit.regress.predict.f(covariate_theta , par.beta[4, ], A)[, 1]
+        ftransform(.,
+               theta.p.21 = count * group_size * mlogit.regress.predict.f(covariate_theta , par.beta[1, ])[, 1],
+               theta.p.12 = count * group_size * mlogit.regress.predict.f(covariate_theta , par.beta[2, ])[, 1],
+               theta.s.21 = count * group_size * mlogit.regress.predict.f(covariate_theta , par.beta[3, ])[, 1],
+               theta.s.12 = count * group_size * mlogit.regress.predict.f(covariate_theta , par.beta[4, ])[, 1]
         ) %>%
         summarise(.,
                   theta.p.21 = sum(theta.p.21) / sum(count * group_size),
@@ -1299,9 +1326,9 @@ theta.est.f <- function(par, dat) {
       # Estimate overall mean for classification probabilities
       theta.mean <-
         dat %>%
-        mutate(.,
-               theta.s.21 = count * group_size * mlogit.regress.predict.f(covariate_theta , par.beta[1, ], A)[, 1],
-               theta.s.12 = count * group_size * mlogit.regress.predict.f(covariate_theta , par.beta[2, ], A)[, 1]
+        ftransform(.,
+               theta.s.21 = count * group_size * mlogit.regress.predict.f(covariate_theta , par.beta[1, ])[, 1],
+               theta.s.12 = count * group_size * mlogit.regress.predict.f(covariate_theta , par.beta[2, ])[, 1]
         ) %>%
         summarise(.,
                   theta.s.21 = sum(theta.s.21) / sum(count * group_size),
@@ -1323,15 +1350,13 @@ theta.est.f <- function(par, dat) {
           sapply(seq(0, 6, by = 2), function(x)
             mlogit.regress.predict.f(
               dat$covariate_theta, 
-              matrix(unlist(par[c((1:2 + x), (9:10 + x))]), ncol = 2),
-              A
-            )[, c(1:2)]
+              matrix(unlist(par[c((1:2 + x), (9:10 + x))]), ncol = 2) )[, c(1:2)]
           ), ncol = 8
         )
       
       theta.mean <- 
         dat %>%
-        mutate(., 
+        ftransform(., 
                theta.p.21 = count * tmp[, 1], 
                theta.p.31 = count * tmp[, 2],
                theta.p.12 = count * tmp[, 3], 
@@ -1360,15 +1385,13 @@ theta.est.f <- function(par, dat) {
           sapply(seq(0, 2, by = 2), function(x)
             mlogit.regress.predict.f(
               dat$covariate_theta, 
-              matrix(unlist(par[c((1:2 + x), (5:6 + x))]), ncol = 2),
-              A
-            )[, c(1:2)]
+              matrix(unlist(par[c((1:2 + x), (5:6 + x))]), ncol = 2) )[, c(1:2)]
           ), ncol = 4
         )
       
       theta.mean <- 
         dat %>%
-        mutate(., 
+        ftransform(., 
                theta.s.21 = count * tmp[, 1],
                theta.s.31 = count * tmp[, 2],
                theta.s.12 = count * tmp[, 3],
@@ -1388,7 +1411,6 @@ theta.est.f <- function(par, dat) {
   } else if (B == 3 & A == 3) {
     # ----- True species states = observation states = 3 -----
     
-    
     if (O_ps[1] > 0 & sim_profiles[1, ]$Model != "M.theta.p") {
       # Multi-observation method (MOM) models 
       
@@ -1398,15 +1420,13 @@ theta.est.f <- function(par, dat) {
           sapply(seq(0, 10, by = 2), function(x)
             mlogit.regress.predict.f(
               dat$covariate_theta, 
-              matrix(unlist(par[c((1:2 + x), (13:14 + x))]), ncol = 2),
-              A
-            )[, c(1:2)]
+              matrix(unlist(par[c((1:2 + x), (13:14 + x))]), ncol = 2) )[, c(1:2)]
           ), ncol = 12
         )
       
       theta.mean <- 
         dat %>%
-        mutate(., 
+        ftransform(., 
                theta.p.21 = count * tmp[, 1], 
                theta.p.31 = count * tmp[, 2],
                theta.p.12 = count * tmp[, 3], 
@@ -1446,15 +1466,13 @@ theta.est.f <- function(par, dat) {
         sapply(seq(0, 4, by = 2), function(x)
           mlogit.regress.predict.f(
             dat$covariate_theta, 
-            matrix(unlist(par[c((1:2 + x), (7:8 + x))]), ncol = 2),
-            A
-          )[, c(1:2)]
+            matrix(unlist(par[c((1:2 + x), (7:8 + x))]), ncol = 2)  )[, c(1:2)]
         ), ncol = 6
       )
     
     theta.mean <- 
       dat %>%
-      mutate(., 
+      ftransform(., 
              theta.s.21 = count * tmp[, 1],
              theta.s.31 = count * tmp[, 2],
              theta.s.12 = count * tmp[, 3],
@@ -1566,18 +1584,18 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
       # Add 95% confidence limits ('.L' and '.U' suffixes) constructed assuming asymptotic normal distribution (in natural scale) and associated 95% coverage interval coverage for natural ('ci.' prefix) and logit scale ('ci.lg.' prefix)
       
       tmp.psi <-
-        as_tibble(cbind(tmp.psi, tmp.se, tmp.lg)) %>%
-        mutate(.,
-               psi.1.L = psi.1 - 1.96 * se.psi.1,
-               psi.1.U = psi.1 + 1.96 * se.psi.1,
-               psi.2.L = psi.2 - 1.96 * se.psi.2,
-               psi.2.U = psi.2 + 1.96 * se.psi.2,
-               ci.psi.1 = (psi.1.L < sim.data[[4]][[1]][1]) * (psi.1.U > sim.data[[4]][[1]][1]),
-               ci.psi.2 = (psi.2.L < sim.data[[4]][[1]][2]) * (psi.2.U > sim.data[[4]][[1]][2]),
-               ci.lg.psi.1 = (psi.1.lg.L < sim.data[[4]][[1]][1]) * (psi.1.lg.U > sim.data[[4]][[1]][1]),
-               ci.lg.psi.2 = (psi.2.lg.L < sim.data[[4]][[1]][2]) * (psi.2.lg.U > sim.data[[4]][[1]][2])
+        qTBL(cbind(tmp.psi, tmp.se, tmp.lg)) %>%
+        ftransform(.,
+                   psi.1.L = psi.1 - 1.96 * se.psi.1,
+                   psi.1.U = psi.1 + 1.96 * se.psi.1,
+                   psi.2.L = psi.2 - 1.96 * se.psi.2,
+                   psi.2.U = psi.2 + 1.96 * se.psi.2) %>%
+        ftransform(.,
+                   ci.psi.1 = (psi.1.L < sim.data[[4]][[1]][1]) * (psi.1.U > sim.data[[4]][[1]][1]),
+                   ci.psi.2 = (psi.2.L < sim.data[[4]][[1]][2]) * (psi.2.U > sim.data[[4]][[1]][2]),
+                   ci.lg.psi.1 = (psi.1.lg.L < sim.data[[4]][[1]][1]) * (psi.1.lg.U > sim.data[[4]][[1]][1]),
+                   ci.lg.psi.2 = (psi.2.lg.L < sim.data[[4]][[1]][2]) * (psi.2.lg.U > sim.data[[4]][[1]][2])
         )
-      
       
       if (sim_profiles$Model[1] == "M.theta.psi" & B == 2 & A == 2 | sim_profiles$Model[1] == "M.theta+psi" & B == 2 & A == 2) {
         ## ----- Models also includes covariate predicting classification probabilities (theta) ----
@@ -1616,50 +1634,29 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
           # Add 95% confidence limits ('.L' and '.U' suffixes) constructed assuming asymptotic normal distribution (in natural scale) and associated 95% coverage interval coverage for natural ('ci.' prefix) and logit scale ('ci.lg.' prefix)
 
           tmp.theta <- 
-            as_tibble(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
-            mutate(., 
-                   theta.p.21.L = theta.p.21 - 1.96 * se.theta.p.21,
-                   theta.p.21.U = theta.p.21 + 1.96 * se.theta.p.21,
-                   theta.p.12.L = theta.p.12 - 1.96 * se.theta.p.12,
-                   theta.p.12.U = theta.p.12 + 1.96 * se.theta.p.12, 
-                   theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
-                   theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
-                   theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
-                   theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12,
-                   
-                   ci.theta.p.21 = (theta.p.21.L < sim.data[[4]][[2]][1]) * (theta.p.21.U > sim.data[[4]][[2]][1]),
-                   ci.theta.p.12 = (theta.p.12.L < sim.data[[4]][[2]][2]) * (theta.p.12.U > sim.data[[4]][[2]][2]),
-                   ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][3]) * (theta.s.21.U > sim.data[[4]][[2]][3]),
-                   ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][4]) * (theta.s.12.U > sim.data[[4]][[2]][4]),
-                   
-                   ci.lg.theta.p.21 = (theta.p.21.lg.L < sim.data[[4]][[2]][1]) * (theta.p.21.lg.U > sim.data[[4]][[2]][1]),
-                   ci.lg.theta.p.12 = (theta.p.12.lg.L < sim.data[[4]][[2]][2]) * (theta.p.12.lg.U > sim.data[[4]][[2]][2]),
-                   ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][3]) * (theta.s.21.lg.U > sim.data[[4]][[2]][3]),
-                   ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][4]) * (theta.s.12.lg.U > sim.data[[4]][[2]][4])
+            qTBL(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
+            ftransform(., 
+                       theta.p.21.L = theta.p.21 - 1.96 * se.theta.p.21,
+                       theta.p.21.U = theta.p.21 + 1.96 * se.theta.p.21,
+                       theta.p.12.L = theta.p.12 - 1.96 * se.theta.p.12,
+                       theta.p.12.U = theta.p.12 + 1.96 * se.theta.p.12, 
+                       theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
+                       theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
+                       theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
+                       theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12) %>%
+            
+            ftransform(., 
+                       
+                       ci.theta.p.21 = (theta.p.21.L < sim.data[[4]][[2]][1]) * (theta.p.21.U > sim.data[[4]][[2]][1]),
+                       ci.theta.p.12 = (theta.p.12.L < sim.data[[4]][[2]][2]) * (theta.p.12.U > sim.data[[4]][[2]][2]),
+                       ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][3]) * (theta.s.21.U > sim.data[[4]][[2]][3]),
+                       ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][4]) * (theta.s.12.U > sim.data[[4]][[2]][4]),
+                       
+                       ci.lg.theta.p.21 = (theta.p.21.lg.L < sim.data[[4]][[2]][1]) * (theta.p.21.lg.U > sim.data[[4]][[2]][1]),
+                       ci.lg.theta.p.12 = (theta.p.12.lg.L < sim.data[[4]][[2]][2]) * (theta.p.12.lg.U > sim.data[[4]][[2]][2]),
+                       ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][3]) * (theta.s.21.lg.U > sim.data[[4]][[2]][3]),
+                       ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][4]) * (theta.s.12.lg.U > sim.data[[4]][[2]][4])
             )
-      
-          # tmp.theta <- 
-          #   as_tibble(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
-          #   mutate(., 
-          #          theta.p.21.L = theta.p.21 - 1.96 * se.theta.p.21,
-          #          theta.p.21.U = theta.p.21 + 1.96 * se.theta.p.21,
-          #          theta.p.12.L = theta.p.12 - 1.96 * se.theta.p.12,
-          #          theta.p.12.U = theta.p.12 + 1.96 * se.theta.p.12, 
-          #          theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
-          #          theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
-          #          theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
-          #          theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12,
-          #          
-          #          ci.theta.p.21 = (theta.p.21.L < sim.data[[4]][[2]][1]) * (theta.p.21.U > sim.data[[4]][[2]][1]),
-          #          ci.theta.p.12 = (theta.p.12.L < sim.data[[4]][[2]][2]) * (theta.p.12.U > sim.data[[4]][[2]][2]),
-          #          ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][3]) * (theta.s.21.U > sim.data[[4]][[2]][3]),
-          #          ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][4]) * (theta.s.12.U > sim.data[[4]][[2]][4]),
-          #          
-          #          ci.lg.theta.p.21 = (theta.p.21.lg.L < sim.data[[4]][[2]][1]) * (theta.p.21.lg.U > sim.data[[4]][[2]][1]),
-          #          ci.lg.theta.p.12 = (theta.p.12.lg.L < sim.data[[4]][[2]][2]) * (theta.p.12.lg.U > sim.data[[4]][[2]][2]),
-          #          ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][3]) * (theta.s.21.lg.U > sim.data[[4]][[2]][3]),
-          #          ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][4]) * (theta.s.12.lg.U > sim.data[[4]][[2]][4])
-          #   )
           
           # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean true species probabilities and classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
           
@@ -1680,13 +1677,13 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
           # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
           
           output.betas <- 
-            bind_cols(tmp.psi, tmp.theta) %>%
-            mutate(., 
-                   psi.1.err = psi.1 - sim.data[[4]][[1]][[1]],
-                   theta.p.21.err = theta.p.21 - sim.data[[4]][[2]][[1]],
-                   theta.p.12.err = theta.p.12 - sim.data[[4]][[2]][[2]],
-                   theta.s.21.err = theta.s.21 - sim.data[[4]][[2]][[3]],
-                   theta.s.12.err = theta.s.12 - sim.data[[4]][[2]][[4]]
+            add_vars(tmp.psi, tmp.theta) %>%
+            ftransform(., 
+                       psi.1.err = psi.1 - sim.data[[4]][[1]][[1]],
+                       theta.p.21.err = theta.p.21 - sim.data[[4]][[2]][[1]],
+                       theta.p.12.err = theta.p.12 - sim.data[[4]][[2]][[2]],
+                       theta.s.21.err = theta.s.21 - sim.data[[4]][[2]][[3]],
+                       theta.s.12.err = theta.s.12 - sim.data[[4]][[2]][[4]]
             ) %>%
             summarise(., 
                       me.psi.1 = mean(psi.1.err), 
@@ -1718,18 +1715,20 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
           # Add 95% confidence limits ('.L' and '.U' suffixes) constructed assuming asymptotic normal distribution (in natural scale) and associated 95% coverage interval coverage for natural ('ci.' prefix) and logit scale ('ci.lg.' prefix)
           
           tmp.theta <- 
-            as_tibble(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
-            mutate(., 
-                   theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
-                   theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
-                   theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
-                   theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12,
-
-                   ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][1]) * (theta.s.21.U > sim.data[[4]][[2]][1]),
-                   ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][2]) * (theta.s.12.U > sim.data[[4]][[2]][2]),
-                   
-                   ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][1]) * (theta.s.21.lg.U > sim.data[[4]][[2]][1]),
-                   ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][2]) * (theta.s.12.lg.U > sim.data[[4]][[2]][2])
+            qTBL(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
+            ftransform(., 
+                       theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
+                       theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
+                       theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
+                       theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12) %>%
+            
+            ftransform(., 
+                       
+                       ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][1]) * (theta.s.21.U > sim.data[[4]][[2]][1]),
+                       ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][2]) * (theta.s.12.U > sim.data[[4]][[2]][2]),
+                       
+                       ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][1]) * (theta.s.21.lg.U > sim.data[[4]][[2]][1]),
+                       ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][2]) * (theta.s.12.lg.U > sim.data[[4]][[2]][2])
             )
           
           # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean true species probabilities and classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
@@ -1749,11 +1748,11 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
           # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
           
           output.betas <- 
-            bind_cols(tmp.psi, tmp.theta) %>%
-            mutate(., 
-                   psi.1.err = psi.1 - sim.data[[4]][[1]][[1]],
-                   theta.s.21.err = theta.s.21 - sim.data[[4]][[2]][[1]],
-                   theta.s.12.err = theta.s.12 - sim.data[[4]][[2]][[2]]
+            add_vars(tmp.psi, tmp.theta) %>%
+            ftransform(., 
+                       psi.1.err = psi.1 - sim.data[[4]][[1]][[1]],
+                       theta.s.21.err = theta.s.21 - sim.data[[4]][[2]][[1]],
+                       theta.s.12.err = theta.s.12 - sim.data[[4]][[2]][[2]]
             ) %>%
             summarise(., 
                       me.psi.1 = mean(psi.1.err), 
@@ -1848,20 +1847,23 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
       # Add 95% confidence limits ('.L' and '.U' suffixes) constructed assuming asymptotic normal distribution (in natural scale) and associated 95% coverage interval coverage for natural ('ci.' prefix) and logit scale ('ci.lg.' prefix)
       
       tmp.psi <-
-        as_tibble(cbind(tmp.psi, tmp.se, tmp.lg)) %>%
-        mutate(.,
-               psi.1.L = psi.1 - 1.96 * se.psi.1,
-               psi.1.U = psi.1 + 1.96 * se.psi.1,
-               psi.2.L = psi.2 - 1.96 * se.psi.2,
-               psi.2.U = psi.2 + 1.96 * se.psi.2,
-               psi.3.L = psi.3 - 1.96 * se.psi.3,
-               psi.3.U = psi.3 + 1.96 * se.psi.3,
-               ci.psi.1 = (psi.1.L < sim.data[[4]][[1]][1]) * (psi.1.U > sim.data[[4]][[1]][1]),
-               ci.psi.2 = (psi.2.L < sim.data[[4]][[1]][2]) * (psi.2.U > sim.data[[4]][[1]][2]),
-               ci.psi.3 = (psi.3.L < sim.data[[4]][[1]][3]) * (psi.3.U > sim.data[[4]][[1]][3]),
-               ci.lg.psi.1 = (psi.1.lg.L < sim.data[[4]][[1]][1]) * (psi.1.lg.U > sim.data[[4]][[1]][1]),
-               ci.lg.psi.2 = (psi.2.lg.L < sim.data[[4]][[1]][2]) * (psi.2.lg.U > sim.data[[4]][[1]][2]),
-               ci.lg.psi.3 = (psi.3.lg.L < sim.data[[4]][[1]][3]) * (psi.3.lg.U > sim.data[[4]][[1]][3])
+        qTBL(cbind(tmp.psi, tmp.se, tmp.lg)) %>%
+        ftransform(.,
+                   psi.1.L = psi.1 - 1.96 * se.psi.1,
+                   psi.1.U = psi.1 + 1.96 * se.psi.1,
+                   psi.2.L = psi.2 - 1.96 * se.psi.2,
+                   psi.2.U = psi.2 + 1.96 * se.psi.2,
+                   psi.3.L = psi.3 - 1.96 * se.psi.3,
+                   psi.3.U = psi.3 + 1.96 * se.psi.3) %>%
+        
+        ftransform(.,
+                   
+                   ci.psi.1 = (psi.1.L < sim.data[[4]][[1]][1]) * (psi.1.U > sim.data[[4]][[1]][1]),
+                   ci.psi.2 = (psi.2.L < sim.data[[4]][[1]][2]) * (psi.2.U > sim.data[[4]][[1]][2]),
+                   ci.psi.3 = (psi.3.L < sim.data[[4]][[1]][3]) * (psi.3.U > sim.data[[4]][[1]][3]),
+                   ci.lg.psi.1 = (psi.1.lg.L < sim.data[[4]][[1]][1]) * (psi.1.lg.U > sim.data[[4]][[1]][1]),
+                   ci.lg.psi.2 = (psi.2.lg.L < sim.data[[4]][[1]][2]) * (psi.2.lg.U > sim.data[[4]][[1]][2]),
+                   ci.lg.psi.3 = (psi.3.lg.L < sim.data[[4]][[1]][3]) * (psi.3.lg.U > sim.data[[4]][[1]][3])
         )
       
       # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean true species probabilities and classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
@@ -1877,7 +1879,7 @@ psi.derived.f <- function(sim_profiles, sim.data, sim.data.tmp, model.results, p
       # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
       
       output.betas <- 
-        mutate(tmp.psi, 
+        ftransform(tmp.psi, 
                psi.1.err = psi.1 - sim.data[[4]][[1]][[1]],
                psi.2.err = psi.2 - sim.data[[4]][[1]][[2]],
                psi.3.err = psi.3 - sim.data[[4]][[1]][[3]]
@@ -1969,27 +1971,30 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Add 95% confidence limits ('.L' and '.U' suffixes) constructed assuming asymptotic normal distribution (in natural scale) and associated 95% coverage interval coverage for natural ('ci.' prefix) and logit scale ('ci.lg.' prefix)
         
         tmp.theta <- 
-          as_tibble(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
-          mutate(., 
-                 theta.p.21.L = theta.p.21 - 1.96 * se.theta.p.21,
-                 theta.p.21.U = theta.p.21 + 1.96 * se.theta.p.21,
-                 theta.p.12.L = theta.p.12 - 1.96 * se.theta.p.12,
-                 theta.p.12.U = theta.p.12 + 1.96 * se.theta.p.12, 
-                 
-                 theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
-                 theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
-                 theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
-                 theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12,
-                 
-                 ci.theta.p.21 = (theta.p.21.L < sim.data[[4]][[2]][1]) * (theta.p.21.U > sim.data[[4]][[2]][1]),
-                 ci.theta.p.12 = (theta.p.12.L < sim.data[[4]][[2]][2]) * (theta.p.12.U > sim.data[[4]][[2]][2]),
-                 ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][3]) * (theta.s.21.U > sim.data[[4]][[2]][3]),
-                 ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][4]) * (theta.s.12.U > sim.data[[4]][[2]][4]),
-                 
-                 ci.lg.theta.p.21 = (theta.p.21.lg.L < sim.data[[4]][[2]][1]) * (theta.p.21.lg.U > sim.data[[4]][[2]][1]),
-                 ci.lg.theta.p.12 = (theta.p.12.lg.L < sim.data[[4]][[2]][2]) * (theta.p.12.lg.U > sim.data[[4]][[2]][2]),
-                 ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][3]) * (theta.s.21.lg.U > sim.data[[4]][[2]][3]),
-                 ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][4]) * (theta.s.12.lg.U > sim.data[[4]][[2]][4])
+          qTBL(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
+          ftransform(., 
+                     
+                     theta.p.21.L = theta.p.21 - 1.96 * se.theta.p.21,
+                     theta.p.21.U = theta.p.21 + 1.96 * se.theta.p.21,
+                     theta.p.12.L = theta.p.12 - 1.96 * se.theta.p.12,
+                     theta.p.12.U = theta.p.12 + 1.96 * se.theta.p.12, 
+                     
+                     theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
+                     theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
+                     theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
+                     theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12) %>%
+          
+          ftransform(., 
+                     
+                     ci.theta.p.21 = (theta.p.21.L < sim.data[[4]][[2]][1]) * (theta.p.21.U > sim.data[[4]][[2]][1]),
+                     ci.theta.p.12 = (theta.p.12.L < sim.data[[4]][[2]][2]) * (theta.p.12.U > sim.data[[4]][[2]][2]),
+                     ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][3]) * (theta.s.21.U > sim.data[[4]][[2]][3]),
+                     ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][4]) * (theta.s.12.U > sim.data[[4]][[2]][4]),
+                     
+                     ci.lg.theta.p.21 = (theta.p.21.lg.L < sim.data[[4]][[2]][1]) * (theta.p.21.lg.U > sim.data[[4]][[2]][1]),
+                     ci.lg.theta.p.12 = (theta.p.12.lg.L < sim.data[[4]][[2]][2]) * (theta.p.12.lg.U > sim.data[[4]][[2]][2]),
+                     ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][3]) * (theta.s.21.lg.U > sim.data[[4]][[2]][3]),
+                     ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][4]) * (theta.s.12.lg.U > sim.data[[4]][[2]][4])
           )
         
         # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
@@ -2008,7 +2013,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
-          mutate(tmp.theta, 
+          ftransform(tmp.theta, 
                  theta.p.21.err = theta.p.21 - sim.data[[4]][[2]][[1]],
                  theta.p.12.err = theta.p.12 - sim.data[[4]][[2]][[2]],
                  theta.s.21.err = theta.s.21 - sim.data[[4]][[2]][[3]],
@@ -2042,18 +2047,21 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Add 95% confidence limits ('.L' and '.U' suffixes) constructed assuming asymptotic normal distribution (in natural scale) and associated 95% coverage interval covarage for natural ('ci.' prefix) and logit scale ('ci.lg.' prefix)
         
         tmp.theta <- 
-          as_tibble(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
-          mutate(., 
-                 theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
-                 theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
-                 theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
-                 theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12,
-                 
-                 ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][1]) * (theta.s.21.U > sim.data[[4]][[2]][1]),
-                 ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][2]) * (theta.s.12.U > sim.data[[4]][[2]][2]),
-                 
-                 ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][1]) * (theta.s.21.lg.U > sim.data[[4]][[2]][1]),
-                 ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][2]) * (theta.s.12.lg.U > sim.data[[4]][[2]][2])
+          qTBL(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
+          ftransform(., 
+                     
+                     theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
+                     theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
+                     theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
+                     theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12) %>%
+          
+          ftransform(., 
+                     
+                     ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][1]) * (theta.s.21.U > sim.data[[4]][[2]][1]),
+                     ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][2]) * (theta.s.12.U > sim.data[[4]][[2]][2]),
+                     
+                     ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][1]) * (theta.s.21.lg.U > sim.data[[4]][[2]][1]),
+                     ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][2]) * (theta.s.12.lg.U > sim.data[[4]][[2]][2])
           )
         
         # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
@@ -2070,7 +2078,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
-          mutate(tmp.theta, 
+          ftransform(tmp.theta, 
                  theta.s.21.err = theta.s.21 - sim.data[[4]][[2]][[1]],
                  theta.s.12.err = theta.s.12 - sim.data[[4]][[2]][[2]]
           ) %>%
@@ -2108,47 +2116,48 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Add 95% confidence limits ('.L' and '.U' suffixes) constructed assuming asymptotic normal distribution (in natural scale) and associated 95% coverage interval coverage for natural ('ci.' prefix) and logit scale ('ci.lg.' prefix)
         
         tmp.theta <- 
-          as_tibble(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
-          mutate(., 
-                 theta.p.21.L = theta.p.21 - 1.96 * se.theta.p.21,
-                 theta.p.21.U = theta.p.21 + 1.96 * se.theta.p.21,
-                 theta.p.31.L = theta.p.31 - 1.96 * se.theta.p.31,
-                 theta.p.31.U = theta.p.31 + 1.96 * se.theta.p.31,
-                 
-                 theta.p.12.L = theta.p.12 - 1.96 * se.theta.p.12,
-                 theta.p.12.U = theta.p.12 + 1.96 * se.theta.p.12, 
-                 theta.p.32.L = theta.p.32 - 1.96 * se.theta.p.32,
-                 theta.p.32.U = theta.p.32 + 1.96 * se.theta.p.32, 
-                 
-                 theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
-                 theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
-                 theta.s.31.L = theta.s.31 - 1.96 * se.theta.s.31,
-                 theta.s.31.U = theta.s.31 + 1.96 * se.theta.s.31,
-                 
-                 theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
-                 theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12, 
-                 theta.s.32.L = theta.s.32 - 1.96 * se.theta.s.32,
-                 theta.s.32.U = theta.s.32 + 1.96 * se.theta.s.32, 
-                 
-                 ci.theta.p.21 = (theta.p.21.L < sim.data[[4]][[2]][1, 1]) * (theta.p.21.U > sim.data[[4]][[2]][1, 1]),
-                 ci.theta.p.31 = (theta.p.31.L < sim.data[[4]][[2]][2, 1]) * (theta.p.31.U > sim.data[[4]][[2]][2, 1]),
-                 ci.theta.p.12 = (theta.p.12.L < sim.data[[4]][[2]][1, 2]) * (theta.p.12.U > sim.data[[4]][[2]][1, 2]),
-                 ci.theta.p.32 = (theta.p.32.L < sim.data[[4]][[2]][2, 2]) * (theta.p.32.U > sim.data[[4]][[2]][2, 2]),
-                 
-                 ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][1, 3]) * (theta.s.21.U > sim.data[[4]][[2]][1, 3]),
-                 ci.theta.s.31 = (theta.s.31.L < sim.data[[4]][[2]][2, 3]) * (theta.s.31.U > sim.data[[4]][[2]][2, 3]),
-                 ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][1, 4]) * (theta.s.12.U > sim.data[[4]][[2]][1, 4]),
-                 ci.theta.s.32 = (theta.s.32.L < sim.data[[4]][[2]][2, 4]) * (theta.s.32.U > sim.data[[4]][[2]][2, 4]),
-                 
-                 ci.lg.theta.p.21 = (theta.p.21.lg.L < sim.data[[4]][[2]][1, 1]) * (theta.p.21.lg.U > sim.data[[4]][[2]][1, 1]),
-                 ci.lg.theta.p.31 = (theta.p.31.lg.L < sim.data[[4]][[2]][2, 1]) * (theta.p.31.lg.U > sim.data[[4]][[2]][2, 1]),
-                 ci.lg.theta.p.12 = (theta.p.12.lg.L < sim.data[[4]][[2]][1, 2]) * (theta.p.12.lg.U > sim.data[[4]][[2]][1, 2]),
-                 ci.lg.theta.p.32 = (theta.p.32.lg.L < sim.data[[4]][[2]][2, 2]) * (theta.p.32.lg.U > sim.data[[4]][[2]][2, 2]),
-                 
-                 ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][1, 3]) * (theta.s.21.lg.U > sim.data[[4]][[2]][1, 3]),
-                 ci.lg.theta.s.31 = (theta.s.31.lg.L < sim.data[[4]][[2]][2, 3]) * (theta.s.31.lg.U > sim.data[[4]][[2]][2, 3]),
-                 ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][1, 4]) * (theta.s.12.lg.U > sim.data[[4]][[2]][1, 4]),
-                 ci.lg.theta.s.32 = (theta.s.32.lg.L < sim.data[[4]][[2]][2, 4]) * (theta.s.32.lg.U > sim.data[[4]][[2]][2, 4])
+          qTBL(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
+          ftransform(., 
+                     theta.p.21.L = theta.p.21 - 1.96 * se.theta.p.21,
+                     theta.p.21.U = theta.p.21 + 1.96 * se.theta.p.21,
+                     theta.p.31.L = theta.p.31 - 1.96 * se.theta.p.31,
+                     theta.p.31.U = theta.p.31 + 1.96 * se.theta.p.31,
+                     
+                     theta.p.12.L = theta.p.12 - 1.96 * se.theta.p.12,
+                     theta.p.12.U = theta.p.12 + 1.96 * se.theta.p.12, 
+                     theta.p.32.L = theta.p.32 - 1.96 * se.theta.p.32,
+                     theta.p.32.U = theta.p.32 + 1.96 * se.theta.p.32, 
+                     
+                     theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
+                     theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
+                     theta.s.31.L = theta.s.31 - 1.96 * se.theta.s.31,
+                     theta.s.31.U = theta.s.31 + 1.96 * se.theta.s.31,
+                     
+                     theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
+                     theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12, 
+                     theta.s.32.L = theta.s.32 - 1.96 * se.theta.s.32,
+                     theta.s.32.U = theta.s.32 + 1.96 * se.theta.s.32) %>%
+          
+          ftransform(., 
+                     ci.theta.p.21 = (theta.p.21.L < sim.data[[4]][[2]][1, 1]) * (theta.p.21.U > sim.data[[4]][[2]][1, 1]),
+                     ci.theta.p.31 = (theta.p.31.L < sim.data[[4]][[2]][2, 1]) * (theta.p.31.U > sim.data[[4]][[2]][2, 1]),
+                     ci.theta.p.12 = (theta.p.12.L < sim.data[[4]][[2]][1, 2]) * (theta.p.12.U > sim.data[[4]][[2]][1, 2]),
+                     ci.theta.p.32 = (theta.p.32.L < sim.data[[4]][[2]][2, 2]) * (theta.p.32.U > sim.data[[4]][[2]][2, 2]),
+                     
+                     ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][1, 3]) * (theta.s.21.U > sim.data[[4]][[2]][1, 3]),
+                     ci.theta.s.31 = (theta.s.31.L < sim.data[[4]][[2]][2, 3]) * (theta.s.31.U > sim.data[[4]][[2]][2, 3]),
+                     ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][1, 4]) * (theta.s.12.U > sim.data[[4]][[2]][1, 4]),
+                     ci.theta.s.32 = (theta.s.32.L < sim.data[[4]][[2]][2, 4]) * (theta.s.32.U > sim.data[[4]][[2]][2, 4]),
+                     
+                     ci.lg.theta.p.21 = (theta.p.21.lg.L < sim.data[[4]][[2]][1, 1]) * (theta.p.21.lg.U > sim.data[[4]][[2]][1, 1]),
+                     ci.lg.theta.p.31 = (theta.p.31.lg.L < sim.data[[4]][[2]][2, 1]) * (theta.p.31.lg.U > sim.data[[4]][[2]][2, 1]),
+                     ci.lg.theta.p.12 = (theta.p.12.lg.L < sim.data[[4]][[2]][1, 2]) * (theta.p.12.lg.U > sim.data[[4]][[2]][1, 2]),
+                     ci.lg.theta.p.32 = (theta.p.32.lg.L < sim.data[[4]][[2]][2, 2]) * (theta.p.32.lg.U > sim.data[[4]][[2]][2, 2]),
+                     
+                     ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][1, 3]) * (theta.s.21.lg.U > sim.data[[4]][[2]][1, 3]),
+                     ci.lg.theta.s.31 = (theta.s.31.lg.L < sim.data[[4]][[2]][2, 3]) * (theta.s.31.lg.U > sim.data[[4]][[2]][2, 3]),
+                     ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][1, 4]) * (theta.s.12.lg.U > sim.data[[4]][[2]][1, 4]),
+                     ci.lg.theta.s.32 = (theta.s.32.lg.L < sim.data[[4]][[2]][2, 4]) * (theta.s.32.lg.U > sim.data[[4]][[2]][2, 4])
           )
         
         # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
@@ -2171,7 +2180,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
-          mutate(tmp.theta, 
+          ftransform(tmp.theta, 
                  theta.p.21.err = theta.p.21 - sim.data[[4]][[2]][1, 1], 
                  theta.p.31.err = theta.p.31 - sim.data[[4]][[2]][2, 1], 
                  theta.p.12.err = theta.p.12 - sim.data[[4]][[2]][1, 2], 
@@ -2220,27 +2229,29 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Add 95% confidence limits ('.L' and '.U' suffixes) constructed assuming asymptotic normal distribution (in natural scale) and associated 95% coverage interval coverage for natural ('ci.' prefix) and logit scale ('ci.lg.' prefix)
         
         tmp.theta <- 
-          as_tibble(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
-          mutate(., 
-                 theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
-                 theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
-                 theta.s.31.L = theta.s.31 - 1.96 * se.theta.s.31,
-                 theta.s.31.U = theta.s.31 + 1.96 * se.theta.s.31,
-                 
-                 theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
-                 theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12, 
-                 theta.s.32.L = theta.s.32 - 1.96 * se.theta.s.32,
-                 theta.s.32.U = theta.s.32 + 1.96 * se.theta.s.32, 
-                 
-                 ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][1, 1]) * (theta.s.21.U > sim.data[[4]][[2]][1, 1]),
-                 ci.theta.s.31 = (theta.s.31.L < sim.data[[4]][[2]][2, 1]) * (theta.s.31.U > sim.data[[4]][[2]][2, 1]),
-                 ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][1, 2]) * (theta.s.12.U > sim.data[[4]][[2]][1, 2]),
-                 ci.theta.s.32 = (theta.s.32.L < sim.data[[4]][[2]][2, 2]) * (theta.s.32.U > sim.data[[4]][[2]][2, 2]),
-                 
-                 ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][1, 1]) * (theta.s.21.lg.U > sim.data[[4]][[2]][1, 1]),
-                 ci.lg.theta.s.31 = (theta.s.31.lg.L < sim.data[[4]][[2]][2, 1]) * (theta.s.31.lg.U > sim.data[[4]][[2]][2, 1]),
-                 ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][1, 2]) * (theta.s.12.lg.U > sim.data[[4]][[2]][1, 2]),
-                 ci.lg.theta.s.32 = (theta.s.32.lg.L < sim.data[[4]][[2]][2, 2]) * (theta.s.32.lg.U > sim.data[[4]][[2]][2, 2])
+          qTBL(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
+          ftransform(., 
+                     theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
+                     theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
+                     theta.s.31.L = theta.s.31 - 1.96 * se.theta.s.31,
+                     theta.s.31.U = theta.s.31 + 1.96 * se.theta.s.31,
+                     
+                     theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
+                     theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12, 
+                     theta.s.32.L = theta.s.32 - 1.96 * se.theta.s.32,
+                     theta.s.32.U = theta.s.32 + 1.96 * se.theta.s.32) %>%
+          
+          ftransform(., 
+                     
+                     ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][1, 1]) * (theta.s.21.U > sim.data[[4]][[2]][1, 1]),
+                     ci.theta.s.31 = (theta.s.31.L < sim.data[[4]][[2]][2, 1]) * (theta.s.31.U > sim.data[[4]][[2]][2, 1]),
+                     ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][1, 2]) * (theta.s.12.U > sim.data[[4]][[2]][1, 2]),
+                     ci.theta.s.32 = (theta.s.32.L < sim.data[[4]][[2]][2, 2]) * (theta.s.32.U > sim.data[[4]][[2]][2, 2]),
+                     
+                     ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][1, 1]) * (theta.s.21.lg.U > sim.data[[4]][[2]][1, 1]),
+                     ci.lg.theta.s.31 = (theta.s.31.lg.L < sim.data[[4]][[2]][2, 1]) * (theta.s.31.lg.U > sim.data[[4]][[2]][2, 1]),
+                     ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][1, 2]) * (theta.s.12.lg.U > sim.data[[4]][[2]][1, 2]),
+                     ci.lg.theta.s.32 = (theta.s.32.lg.L < sim.data[[4]][[2]][2, 2]) * (theta.s.32.lg.U > sim.data[[4]][[2]][2, 2])
           )
         
         # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
@@ -2259,7 +2270,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
-          mutate(tmp.theta, 
+          ftransform(tmp.theta, 
                  theta.s.21.err = theta.s.21 - sim.data[[4]][[2]][1, 1], 
                  theta.s.31.err = theta.s.31 - sim.data[[4]][[2]][2, 1],
                  theta.s.12.err = theta.s.12 - sim.data[[4]][[2]][1, 2],
@@ -2303,65 +2314,67 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Add 95% confidence limits ('.L' and '.U' suffixes) constructed assuming asymptotic normal distribution (in natural scale) and associated 95% coverage interval coverage for natural ('ci.' prefix) and logit scale ('ci.lg.' prefix)
         
         tmp.theta <- 
-          as_tibble(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
-          mutate(., 
-                 theta.p.21.L = theta.p.21 - 1.96 * se.theta.p.21,
-                 theta.p.21.U = theta.p.21 + 1.96 * se.theta.p.21,
-                 theta.p.31.L = theta.p.31 - 1.96 * se.theta.p.31,
-                 theta.p.31.U = theta.p.31 + 1.96 * se.theta.p.31,
-                 
-                 theta.p.12.L = theta.p.12 - 1.96 * se.theta.p.12,
-                 theta.p.12.U = theta.p.12 + 1.96 * se.theta.p.12, 
-                 theta.p.32.L = theta.p.32 - 1.96 * se.theta.p.32,
-                 theta.p.32.U = theta.p.32 + 1.96 * se.theta.p.32,
-                 
-                 theta.p.13.L = theta.p.13 - 1.96 * se.theta.p.13,
-                 theta.p.13.U = theta.p.13 + 1.96 * se.theta.p.13, 
-                 theta.p.23.L = theta.p.23 - 1.96 * se.theta.p.23,
-                 theta.p.23.U = theta.p.23 + 1.96 * se.theta.p.23,
-                 
-                 theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
-                 theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
-                 theta.s.31.L = theta.s.31 - 1.96 * se.theta.s.31,
-                 theta.s.31.U = theta.s.31 + 1.96 * se.theta.s.31,
-                 
-                 theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
-                 theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12, 
-                 theta.s.32.L = theta.s.32 - 1.96 * se.theta.s.32,
-                 theta.s.32.U = theta.s.32 + 1.96 * se.theta.s.32,
-                 
-                 theta.s.13.L = theta.s.13 - 1.96 * se.theta.s.13,
-                 theta.s.13.U = theta.s.13 + 1.96 * se.theta.s.13, 
-                 theta.s.23.L = theta.s.23 - 1.96 * se.theta.s.23,
-                 theta.s.23.U = theta.s.23 + 1.96 * se.theta.s.23,
-                 
-                 ci.theta.p.21 = (theta.p.21.L < sim.data[[4]][[2]][1, 1]) * (theta.p.21.U > sim.data[[4]][[2]][1, 1]),
-                 ci.theta.p.31 = (theta.p.31.L < sim.data[[4]][[2]][2, 1]) * (theta.p.31.U > sim.data[[4]][[2]][2, 1]),
-                 ci.theta.p.12 = (theta.p.12.L < sim.data[[4]][[2]][1, 2]) * (theta.p.12.U > sim.data[[4]][[2]][1, 2]),
-                 ci.theta.p.32 = (theta.p.32.L < sim.data[[4]][[2]][2, 2]) * (theta.p.32.U > sim.data[[4]][[2]][2, 2]),
-                 ci.theta.p.13 = (theta.p.13.L < sim.data[[4]][[2]][1, 3]) * (theta.p.13.U > sim.data[[4]][[2]][1, 3]),
-                 ci.theta.p.23 = (theta.p.23.L < sim.data[[4]][[2]][2, 3]) * (theta.p.23.U > sim.data[[4]][[2]][2, 3]),
-                 
-                 ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][1, 4]) * (theta.s.21.U > sim.data[[4]][[2]][1, 4]),
-                 ci.theta.s.31 = (theta.s.31.L < sim.data[[4]][[2]][2, 4]) * (theta.s.31.U > sim.data[[4]][[2]][2, 4]),
-                 ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][1, 5]) * (theta.s.12.U > sim.data[[4]][[2]][1, 5]),
-                 ci.theta.s.32 = (theta.s.32.L < sim.data[[4]][[2]][2, 5]) * (theta.s.32.U > sim.data[[4]][[2]][2, 5]),
-                 ci.theta.s.13 = (theta.s.13.L < sim.data[[4]][[2]][1, 6]) * (theta.s.13.U > sim.data[[4]][[2]][1, 6]),
-                 ci.theta.s.23 = (theta.s.23.L < sim.data[[4]][[2]][2, 6]) * (theta.s.23.U > sim.data[[4]][[2]][2, 6]),
-                 
-                 ci.lg.theta.p.21 = (theta.p.21.lg.L < sim.data[[4]][[2]][1, 1]) * (theta.p.21.lg.U > sim.data[[4]][[2]][1, 1]),
-                 ci.lg.theta.p.31 = (theta.p.31.lg.L < sim.data[[4]][[2]][2, 1]) * (theta.p.31.lg.U > sim.data[[4]][[2]][2, 1]),
-                 ci.lg.theta.p.12 = (theta.p.12.lg.L < sim.data[[4]][[2]][1, 2]) * (theta.p.12.lg.U > sim.data[[4]][[2]][1, 2]),
-                 ci.lg.theta.p.32 = (theta.p.32.lg.L < sim.data[[4]][[2]][2, 2]) * (theta.p.32.lg.U > sim.data[[4]][[2]][2, 2]),
-                 ci.lg.theta.p.13 = (theta.p.13.lg.L < sim.data[[4]][[2]][1, 3]) * (theta.p.13.lg.U > sim.data[[4]][[2]][1, 3]),
-                 ci.lg.theta.p.23 = (theta.p.23.lg.L < sim.data[[4]][[2]][2, 3]) * (theta.p.23.lg.U > sim.data[[4]][[2]][2, 3]),
-                 
-                 ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][1, 4]) * (theta.s.21.lg.U > sim.data[[4]][[2]][1, 4]),
-                 ci.lg.theta.s.31 = (theta.s.31.lg.L < sim.data[[4]][[2]][2, 4]) * (theta.s.31.lg.U > sim.data[[4]][[2]][2, 4]),
-                 ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][1, 5]) * (theta.s.12.lg.U > sim.data[[4]][[2]][1, 5]),
-                 ci.lg.theta.s.32 = (theta.s.32.lg.L < sim.data[[4]][[2]][2, 5]) * (theta.s.32.lg.U > sim.data[[4]][[2]][2, 5]),
-                 ci.lg.theta.s.13 = (theta.s.13.lg.L < sim.data[[4]][[2]][1, 6]) * (theta.s.13.lg.U > sim.data[[4]][[2]][1, 6]),
-                 ci.lg.theta.s.23 = (theta.s.23.lg.L < sim.data[[4]][[2]][2, 6]) * (theta.s.23.lg.U > sim.data[[4]][[2]][2, 6])
+          qTBL(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
+          ftransform(., 
+                     theta.p.21.L = theta.p.21 - 1.96 * se.theta.p.21,
+                     theta.p.21.U = theta.p.21 + 1.96 * se.theta.p.21,
+                     theta.p.31.L = theta.p.31 - 1.96 * se.theta.p.31,
+                     theta.p.31.U = theta.p.31 + 1.96 * se.theta.p.31,
+                     
+                     theta.p.12.L = theta.p.12 - 1.96 * se.theta.p.12,
+                     theta.p.12.U = theta.p.12 + 1.96 * se.theta.p.12, 
+                     theta.p.32.L = theta.p.32 - 1.96 * se.theta.p.32,
+                     theta.p.32.U = theta.p.32 + 1.96 * se.theta.p.32,
+                     
+                     theta.p.13.L = theta.p.13 - 1.96 * se.theta.p.13,
+                     theta.p.13.U = theta.p.13 + 1.96 * se.theta.p.13, 
+                     theta.p.23.L = theta.p.23 - 1.96 * se.theta.p.23,
+                     theta.p.23.U = theta.p.23 + 1.96 * se.theta.p.23,
+                     
+                     theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
+                     theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
+                     theta.s.31.L = theta.s.31 - 1.96 * se.theta.s.31,
+                     theta.s.31.U = theta.s.31 + 1.96 * se.theta.s.31,
+                     
+                     theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
+                     theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12, 
+                     theta.s.32.L = theta.s.32 - 1.96 * se.theta.s.32,
+                     theta.s.32.U = theta.s.32 + 1.96 * se.theta.s.32,
+                     
+                     theta.s.13.L = theta.s.13 - 1.96 * se.theta.s.13,
+                     theta.s.13.U = theta.s.13 + 1.96 * se.theta.s.13, 
+                     theta.s.23.L = theta.s.23 - 1.96 * se.theta.s.23,
+                     theta.s.23.U = theta.s.23 + 1.96 * se.theta.s.23) %>%
+          
+          ftransform(., 
+                     
+                     ci.theta.p.21 = (theta.p.21.L < sim.data[[4]][[2]][1, 1]) * (theta.p.21.U > sim.data[[4]][[2]][1, 1]),
+                     ci.theta.p.31 = (theta.p.31.L < sim.data[[4]][[2]][2, 1]) * (theta.p.31.U > sim.data[[4]][[2]][2, 1]),
+                     ci.theta.p.12 = (theta.p.12.L < sim.data[[4]][[2]][1, 2]) * (theta.p.12.U > sim.data[[4]][[2]][1, 2]),
+                     ci.theta.p.32 = (theta.p.32.L < sim.data[[4]][[2]][2, 2]) * (theta.p.32.U > sim.data[[4]][[2]][2, 2]),
+                     ci.theta.p.13 = (theta.p.13.L < sim.data[[4]][[2]][1, 3]) * (theta.p.13.U > sim.data[[4]][[2]][1, 3]),
+                     ci.theta.p.23 = (theta.p.23.L < sim.data[[4]][[2]][2, 3]) * (theta.p.23.U > sim.data[[4]][[2]][2, 3]),
+                     
+                     ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][1, 4]) * (theta.s.21.U > sim.data[[4]][[2]][1, 4]),
+                     ci.theta.s.31 = (theta.s.31.L < sim.data[[4]][[2]][2, 4]) * (theta.s.31.U > sim.data[[4]][[2]][2, 4]),
+                     ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][1, 5]) * (theta.s.12.U > sim.data[[4]][[2]][1, 5]),
+                     ci.theta.s.32 = (theta.s.32.L < sim.data[[4]][[2]][2, 5]) * (theta.s.32.U > sim.data[[4]][[2]][2, 5]),
+                     ci.theta.s.13 = (theta.s.13.L < sim.data[[4]][[2]][1, 6]) * (theta.s.13.U > sim.data[[4]][[2]][1, 6]),
+                     ci.theta.s.23 = (theta.s.23.L < sim.data[[4]][[2]][2, 6]) * (theta.s.23.U > sim.data[[4]][[2]][2, 6]),
+                     
+                     ci.lg.theta.p.21 = (theta.p.21.lg.L < sim.data[[4]][[2]][1, 1]) * (theta.p.21.lg.U > sim.data[[4]][[2]][1, 1]),
+                     ci.lg.theta.p.31 = (theta.p.31.lg.L < sim.data[[4]][[2]][2, 1]) * (theta.p.31.lg.U > sim.data[[4]][[2]][2, 1]),
+                     ci.lg.theta.p.12 = (theta.p.12.lg.L < sim.data[[4]][[2]][1, 2]) * (theta.p.12.lg.U > sim.data[[4]][[2]][1, 2]),
+                     ci.lg.theta.p.32 = (theta.p.32.lg.L < sim.data[[4]][[2]][2, 2]) * (theta.p.32.lg.U > sim.data[[4]][[2]][2, 2]),
+                     ci.lg.theta.p.13 = (theta.p.13.lg.L < sim.data[[4]][[2]][1, 3]) * (theta.p.13.lg.U > sim.data[[4]][[2]][1, 3]),
+                     ci.lg.theta.p.23 = (theta.p.23.lg.L < sim.data[[4]][[2]][2, 3]) * (theta.p.23.lg.U > sim.data[[4]][[2]][2, 3]),
+                     
+                     ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][1, 4]) * (theta.s.21.lg.U > sim.data[[4]][[2]][1, 4]),
+                     ci.lg.theta.s.31 = (theta.s.31.lg.L < sim.data[[4]][[2]][2, 4]) * (theta.s.31.lg.U > sim.data[[4]][[2]][2, 4]),
+                     ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][1, 5]) * (theta.s.12.lg.U > sim.data[[4]][[2]][1, 5]),
+                     ci.lg.theta.s.32 = (theta.s.32.lg.L < sim.data[[4]][[2]][2, 5]) * (theta.s.32.lg.U > sim.data[[4]][[2]][2, 5]),
+                     ci.lg.theta.s.13 = (theta.s.13.lg.L < sim.data[[4]][[2]][1, 6]) * (theta.s.13.lg.U > sim.data[[4]][[2]][1, 6]),
+                     ci.lg.theta.s.23 = (theta.s.23.lg.L < sim.data[[4]][[2]][2, 6]) * (theta.s.23.lg.U > sim.data[[4]][[2]][2, 6])
           )
         
         # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
@@ -2390,7 +2403,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
-          mutate(tmp.theta, 
+          ftransform(tmp.theta, 
                  theta.p.21.err = theta.p.21 - sim.data[[4]][[2]][1, 1],
                  theta.p.31.err = theta.p.31 - sim.data[[4]][[2]][2, 1],
                  theta.p.12.err = theta.p.12 - sim.data[[4]][[2]][1, 2],
@@ -2459,36 +2472,38 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Add 95% confidence limits ('.L' and '.U' suffixes) constructed assuming asymptotic normal distribution (in natural scale) and associated 95% coverage interval covarage for natural ('ci.' prefix) and logit scale ('ci.lg.' prefix)
         
         tmp.theta <- 
-          as_tibble(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
-          mutate(., 
-                 theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
-                 theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
-                 theta.s.31.L = theta.s.31 - 1.96 * se.theta.s.31,
-                 theta.s.31.U = theta.s.31 + 1.96 * se.theta.s.31,
-                 
-                 theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
-                 theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12, 
-                 theta.s.32.L = theta.s.32 - 1.96 * se.theta.s.32,
-                 theta.s.32.U = theta.s.32 + 1.96 * se.theta.s.32,
-                 
-                 theta.s.13.L = theta.s.13 - 1.96 * se.theta.s.13,
-                 theta.s.13.U = theta.s.13 + 1.96 * se.theta.s.13, 
-                 theta.s.23.L = theta.s.23 - 1.96 * se.theta.s.23,
-                 theta.s.23.U = theta.s.23 + 1.96 * se.theta.s.23,
-                 
-                 ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][1, 1]) * (theta.s.21.U > sim.data[[4]][[2]][1, 1]),
-                 ci.theta.s.31 = (theta.s.31.L < sim.data[[4]][[2]][2, 1]) * (theta.s.31.U > sim.data[[4]][[2]][2, 1]),
-                 ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][1, 2]) * (theta.s.12.U > sim.data[[4]][[2]][1, 2]),
-                 ci.theta.s.32 = (theta.s.32.L < sim.data[[4]][[2]][2, 2]) * (theta.s.32.U > sim.data[[4]][[2]][2, 3]),
-                 ci.theta.s.13 = (theta.s.13.L < sim.data[[4]][[2]][1, 3]) * (theta.s.13.U > sim.data[[4]][[2]][1, 3]),
-                 ci.theta.s.23 = (theta.s.23.L < sim.data[[4]][[2]][2, 3]) * (theta.s.23.U > sim.data[[4]][[2]][2, 3]),
-                 
-                 ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][1, 1]) * (theta.s.21.lg.U > sim.data[[4]][[2]][1, 1]),
-                 ci.lg.theta.s.31 = (theta.s.31.lg.L < sim.data[[4]][[2]][2, 1]) * (theta.s.31.lg.U > sim.data[[4]][[2]][2, 1]),
-                 ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][1, 2]) * (theta.s.12.lg.U > sim.data[[4]][[2]][1, 2]),
-                 ci.lg.theta.s.32 = (theta.s.32.lg.L < sim.data[[4]][[2]][2, 2]) * (theta.s.32.lg.U > sim.data[[4]][[2]][2, 2]),
-                 ci.lg.theta.s.13 = (theta.s.13.lg.L < sim.data[[4]][[2]][1, 3]) * (theta.s.13.lg.U > sim.data[[4]][[2]][1, 3]),
-                 ci.lg.theta.s.23 = (theta.s.23.lg.L < sim.data[[4]][[2]][2, 3]) * (theta.s.23.lg.U > sim.data[[4]][[2]][2, 3])
+          qTBL(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
+          ftransform(., 
+                     theta.s.21.L = theta.s.21 - 1.96 * se.theta.s.21,
+                     theta.s.21.U = theta.s.21 + 1.96 * se.theta.s.21,
+                     theta.s.31.L = theta.s.31 - 1.96 * se.theta.s.31,
+                     theta.s.31.U = theta.s.31 + 1.96 * se.theta.s.31,
+                     
+                     theta.s.12.L = theta.s.12 - 1.96 * se.theta.s.12,
+                     theta.s.12.U = theta.s.12 + 1.96 * se.theta.s.12, 
+                     theta.s.32.L = theta.s.32 - 1.96 * se.theta.s.32,
+                     theta.s.32.U = theta.s.32 + 1.96 * se.theta.s.32,
+                     
+                     theta.s.13.L = theta.s.13 - 1.96 * se.theta.s.13,
+                     theta.s.13.U = theta.s.13 + 1.96 * se.theta.s.13, 
+                     theta.s.23.L = theta.s.23 - 1.96 * se.theta.s.23,
+                     theta.s.23.U = theta.s.23 + 1.96 * se.theta.s.23) %>%
+          
+          ftransform(., 
+                     
+                     ci.theta.s.21 = (theta.s.21.L < sim.data[[4]][[2]][1, 1]) * (theta.s.21.U > sim.data[[4]][[2]][1, 1]),
+                     ci.theta.s.31 = (theta.s.31.L < sim.data[[4]][[2]][2, 1]) * (theta.s.31.U > sim.data[[4]][[2]][2, 1]),
+                     ci.theta.s.12 = (theta.s.12.L < sim.data[[4]][[2]][1, 2]) * (theta.s.12.U > sim.data[[4]][[2]][1, 2]),
+                     ci.theta.s.32 = (theta.s.32.L < sim.data[[4]][[2]][2, 2]) * (theta.s.32.U > sim.data[[4]][[2]][2, 3]),
+                     ci.theta.s.13 = (theta.s.13.L < sim.data[[4]][[2]][1, 3]) * (theta.s.13.U > sim.data[[4]][[2]][1, 3]),
+                     ci.theta.s.23 = (theta.s.23.L < sim.data[[4]][[2]][2, 3]) * (theta.s.23.U > sim.data[[4]][[2]][2, 3]),
+                     
+                     ci.lg.theta.s.21 = (theta.s.21.lg.L < sim.data[[4]][[2]][1, 1]) * (theta.s.21.lg.U > sim.data[[4]][[2]][1, 1]),
+                     ci.lg.theta.s.31 = (theta.s.31.lg.L < sim.data[[4]][[2]][2, 1]) * (theta.s.31.lg.U > sim.data[[4]][[2]][2, 1]),
+                     ci.lg.theta.s.12 = (theta.s.12.lg.L < sim.data[[4]][[2]][1, 2]) * (theta.s.12.lg.U > sim.data[[4]][[2]][1, 2]),
+                     ci.lg.theta.s.32 = (theta.s.32.lg.L < sim.data[[4]][[2]][2, 2]) * (theta.s.32.lg.U > sim.data[[4]][[2]][2, 2]),
+                     ci.lg.theta.s.13 = (theta.s.13.lg.L < sim.data[[4]][[2]][1, 3]) * (theta.s.13.lg.U > sim.data[[4]][[2]][1, 3]),
+                     ci.lg.theta.s.23 = (theta.s.23.lg.L < sim.data[[4]][[2]][2, 3]) * (theta.s.23.lg.U > sim.data[[4]][[2]][2, 3])
           )
         
         # Output matrix 'betas' contains results for individual simulation replicates: estimated regression coefficients, estimated overall mean classification probabilities, 95% confidence limits and confidence interval coverage, true values, and an index the distinct model (simulation profile)
@@ -2510,7 +2525,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
-          mutate(tmp.theta, 
+          ftransform(tmp.theta, 
                  theta.s.21.err = theta.s.21 - sim.data[[4]][[2]][1, 1],
                  theta.s.31.err = theta.s.31 - sim.data[[4]][[2]][2, 1],
                  theta.s.12.err = theta.s.12 - sim.data[[4]][[2]][1, 2],
@@ -2561,7 +2576,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
       # Add 95% confidence limits ('.L' and '.U' suffixes) constructed assuming asymptotic normal distribution (in natural scale) and associated 95% coverage interval coverage for natural ('ci.' prefix) and logit scale ('ci.lg.' prefix)
       
         tmp.theta <- 
-          as_tibble(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
+          qTBL(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
           mutate(., 
                  theta.p.21.L = theta_p_21 - 1.96 * se.theta.p.21,
                  theta.p.21.U = theta_p_21 + 1.96 * se.theta.p.21,
@@ -2589,7 +2604,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
-          mutate(tmp.theta, 
+          ftransform(tmp.theta, 
                  theta.p.21.err = theta_p_21 - sim.data[[4]][[2]][[1]],
                  theta.p.12.err = theta_p_12 - sim.data[[4]][[2]][[2]]
           ) %>%
@@ -2620,7 +2635,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
       # Add 95% confidence limits ('.L' and '.U' suffixes) constructed assuming asymptotic normal distribution (in natural scale) and associated 95% coverage interval covarage for natural ('ci.' prefix) and logit scale ('ci.lg.' prefix)
       
         tmp.theta <- 
-          as_tibble(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
+          qTBL(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
           mutate(., 
                  theta.p.21.L = theta_p_21 - 1.96 * se.theta.p.21,
                  theta.p.21.U = theta_p_21 + 1.96 * se.theta.p.21,
@@ -2659,7 +2674,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
-          mutate(tmp.theta, 
+          ftransform(tmp.theta, 
                  theta.p.21.err = theta_p_21 - sim.data[[4]][[2]][1, 1], 
                  theta.p.31.err = theta_p_31 - sim.data[[4]][[2]][2, 1], 
                  theta.p.12.err = theta_p_12 - sim.data[[4]][[2]][1, 2], 
@@ -2697,7 +2712,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
       # Add 95% confidence limits ('.L' and '.U' suffixes) constructed assuming asymptotic normal distribution (in natural scale) and associated 95% coverage interval coverage for natural ('ci.' prefix) and logit scale ('ci.lg.' prefix)
       
         tmp.theta <- 
-          as_tibble(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
+          qTBL(cbind(tmp.theta, tmp.se, tmp.lg)) %>%
           mutate(., 
                  theta.p.21.L = theta_p_21 - 1.96 * se.theta.p.21,
                  theta.p.21.U = theta_p_21 + 1.96 * se.theta.p.21,
@@ -2748,7 +2763,7 @@ theta.derived.f <- function(sim.data, sim.data.tmp, model.results, parameter.out
         # Output data frame 'output.betas' contains results for each simulation summarized across replicates: mean error ('me.' prefix), root mean square error ('rm.' prefix), and 95% confidence interval coverage (with confidence limits constructed in logit scale) for estimated overall means ('ci.lg' prefix)
         
         output.betas <- 
-          mutate(tmp.theta, 
+          ftransform(tmp.theta, 
                  theta.p.21.err = theta_p_21 - sim.data[[4]][[2]][1, 1],
                  theta.p.31.err = theta_p_31 - sim.data[[4]][[2]][2, 1],
                  theta.p.12.err = theta_p_12 - sim.data[[4]][[2]][1, 2],
@@ -3708,76 +3723,89 @@ psi.bootstrap.f <- function(sim.data, tmp.psi, tmp.psi.boot, tmp.theta.boot, out
 
 mlogit.group.predict.f <- function(dat, profile, output) {
   
-  # Extract covariate values
-  covariate <- unlist(dat[, grep("cov", names(dat))])
   B <- profile$B
   A <- profile$A
   
   if (profile$Model == "M.psi" | profile$Model == "M.theta.psi") {
     # Predict true species probabilities 
     
+    # Extract covariate values
+    covariate <- unlist(dat[, grep("covariate_psi", names(dat))])
+    
+    
     # Extract estimated 'beta.m' and true 'beta.t' regression coefficients (column 1/2 = intercepts/slopes)
     beta.m <- 
       matrix(c(
-        unlist(output[grep("^m.b", names(output))]) 
+        unlist(output[grep("^m.b[01]_psi", names(output))  ]) 
       ),
       ncol = 2,
       byrow = TRUE)
     
     beta.t <- 
       matrix(c(
-        unlist(profile[grep("^b[0123456789]_", names(profile))]) 
+        unlist(profile[grep("^b[01]_psi", names(profile))]) 
       ),
       ncol = 2,
       byrow = TRUE)
     
     # Predict group-level probabilities from estimated 'psi.m' and true 'psi.t' parameters, find difference 'diff'
-    psi.m <- mlogit.regress.predict.f(covariate, beta.m, B)
-    psi.t <- mlogit.regress.predict.f(covariate, beta.t, B)
+    psi.m <- mlogit.regress.predict.f(covariate, beta.m)
+    psi.t <- mlogit.regress.predict.f(covariate, beta.t)
     diff <- psi.m - psi.t 
     if (B == 2) {diff <- diff[, 1, drop = FALSE]}
     
     # Compute mean and SD accounting for counts of each unique observation history
-    n.diff <- (dim(diff)[2] * sum(dat$count))
+    n.diff <- (ncol(diff) * sum(dat$count))
     n.count <-
       matrix(dat$count, 
              nrow = length(dat$count), 
-             ncol = dim(diff)[2])
+             ncol = ncol(diff))
     diff.mean <- sum(diff * n.count) / n.diff
     diff.sd <- ((sum(diff ^ 2 * n.count) - sum(diff * n.count) ^ 2 / n.diff) / (n.diff - 1)) ^ 0.5
     
-    out <- c(diff.mean, diff.sd)
-    names(out) <- c("m.psi.diff", "sd.psi.diff")
-    return(out)
-  }else if (profile$Model == "M.theta") {
+    out_psi <- c(diff.mean, diff.sd)
+    names(out_psi) <- c("m.psi.diff", "sd.psi.diff")
+    
+    if (profile$Model == "M.psi") {
+      return(out_psi)
+    }
+    
+  }
+  
+  if (profile$Model == "M.theta" | profile$Model == "M.theta.psi") {
     # Predict classification probabilities 
+    
+    # Extract covariate values
+    covariate <- unlist(dat[, grep("covariate_theta", names(dat))])
+    
+    
     if (B == 2 & A == 2) {
       # True species states B = observation states A = 2
       
       # Extract estimated 'beta.m' and true 'beta.t' regression coefficients (column 1/2 = intercepts/slopes)
       beta.m <- 
         matrix(c(
-          unlist(output[grep("^m.b", names(output))]) 
+          unlist(output[grep("^m.b[01]_theta", names(output))]) 
         ),
         ncol = 2)
       
       beta.t <- 
         matrix(c(
-          unlist(profile[grep("^b[0123456789]_", names(profile))]) 
+          unlist(profile[grep("^b[01]_theta", names(profile))]) 
         ),
         ncol = 2)
       
       # Predict group-level probabilities from estimated 'theta.m' and true 'theta.t' parameters, find difference 'diff'
       theta.m <- apply(beta.m, 1, function(x)
-        mlogit.regress.predict.f(covariate, x, A)[, 1])
+        mlogit.regress.predict.f(covariate, x)[, 1])
       
       theta.t <- apply(beta.t, 1, function(x)
-        mlogit.regress.predict.f(covariate, x, A)[, 1])
+        mlogit.regress.predict.f(covariate, x)[, 1])
       
       diff <- theta.m - theta.t 
       
       # Compute mean and SD accounting for counts of each unique observation history
-      n.diff <- (dim(diff)[2] * sum(dat$count))
+      n.diff <- (ncol(diff) * sum(dat$count))
       n.count <-
         matrix(dat$count, 
                nrow = dim(diff)[1], 
@@ -3789,24 +3817,29 @@ mlogit.group.predict.f <- function(dat, profile, output) {
       out <- c(diff.mean, diff.sd)
       
       names(out) <- c("m.theta.diff", "sd.theta.diff")
-      return(out)
+      
+      if (profile$Model == "M.theta.psi") {
+        return(c(out_psi, out))
+      } else 
+        return(out)
+      
     }else if (A == 3) {
       # Observation states A = 3
       
       # Extract estimated 'beta.m' and true 'beta.t' regression coefficients (column 1/2 = intercepts/slopes)
       beta.m <-
-        cbind(matrix(c(unlist(output[grep("^m.b0", names(output))])),
+        cbind(matrix(c(unlist(output[grep("^m.b0_theta", names(output))])),
                      ncol = 2,
                      byrow = TRUE),
-              matrix(c(unlist(output[grep("^m.b1", names(output))])),
+              matrix(c(unlist(output[grep("^m.b1_theta", names(output))])),
                      ncol = 2,
                      byrow = TRUE))
       
       beta.t <- 
-        cbind(matrix(c(unlist(profile[grep("^b0_", names(profile))])),
+        cbind(matrix(c(unlist(profile[grep("^b0_theta", names(profile))])),
                      ncol = 2,
                      byrow = TRUE),
-              matrix(c(unlist(profile[grep("^b1_", names(profile))])),
+              matrix(c(unlist(profile[grep("^b1_theta", names(profile))])),
                      ncol = 2,
                      byrow = TRUE))
       
@@ -3814,19 +3847,17 @@ mlogit.group.predict.f <- function(dat, profile, output) {
       theta.m <- apply(beta.m, 1, function(x)
         mlogit.regress.predict.f(
           covariate, 
-          matrix(x, ncol = 2, byrow = FALSE), 
-          A))
+          matrix(x, ncol = 2, byrow = FALSE) ))
       
       theta.t <- apply(beta.t, 1, function(x)
         mlogit.regress.predict.f(
           covariate, 
-          matrix(x, ncol = 2, byrow = FALSE), 
-          A))
+          matrix(x, ncol = 2, byrow = FALSE) ))
       
       diff <- theta.m - theta.t 
       
       # Compute mean and SD accounting for counts of each unique observation history
-      n.diff <- ((dim(diff)[1] / length(dat$count)) * dim(diff)[2] * sum(dat$count))
+      n.diff <- ((dim(diff)[1] / length(dat$count)) * ncol(diff) * sum(dat$count))
       n.count <-
         matrix(dat$count, 
                nrow = dim(diff)[1], 
@@ -3837,7 +3868,11 @@ mlogit.group.predict.f <- function(dat, profile, output) {
       out <- c(diff.mean, diff.sd)
       
       names(out) <- c("m.theta.diff", "sd.theta.diff")
-      return(out)
+      
+      if (profile$Model == "M.theta.psi") {
+        return(cbind(out_psi, out))
+      } else 
+        return(out)
     }
   }
 }
