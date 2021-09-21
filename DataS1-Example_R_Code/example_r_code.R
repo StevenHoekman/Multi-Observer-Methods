@@ -1,5 +1,5 @@
-# example_r_code.R
-# Version 1.1.2
+# example_r_code_fastverse.R
+# Version 1.2.0
 # R code for examples demonstrating estimation of uncertain identification using multi-observer methods
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
@@ -9,11 +9,19 @@
 #               Load R packages
 ###############################################################################
 
-# Required packages
-library(dplyr)  # Data frame manipulation
+# # Required packages
+# library(dplyr)      # Data frame manipulation
+# library(fastverse)  # High-performance statistical computing, data manipulation
+# # library(Rfast)      High-performance data analysis
+# 
+# # Optional package for estimating variances and standard errors of back-transformed parameter estimates
+# library(mrds)   # Delta method for arbitrary functions
 
-# Optional package for estimating variances and standard errors of back-transformed parameter estimates
-library(mrds)   # Delta method for arbitrary functions
+library(fastverse)
+
+fastverse_detach(data.table, kit, fst)
+
+fastverse_extend(dplyr, mrds, Rfast)
 
 ###############################################################################
 #               Load R workspace
@@ -84,22 +92,26 @@ group.probability.constant.f <- function(p, m, g) {
 group.true.probability.key.f <- function(group_probability, size_probability, size){
   
   # Calculate probabilities first for homogeneous groups at the start/end of each vector, then add probabilities for heterogeneous groups with decreasing numbers of species 1 and increasing numbers of species 2.
-  homogeneous <-
-    vapply(1:2, function(x)
-      group_probability[x] * size_probability[size, x], numeric(length(size)))
-
-  output <- lapply(size, function(x) c(
-    homogeneous[which(size == x) , 1],
-    group_probability[3] * size_probability[0:(x - 1), 2] * size_probability[(x - 1):0, 1],
-    homogeneous[which(size == x) , 2]
-  ))
   
-  # Label each vector element by count of species 1/species 2.
-  names(output) <- paste(size)
-  for (i in 1:length(size)) {
-    names(output[[paste0(size[i])]]) <- paste0(size[i]:0, 0:size[i])
-  }
-  output
+  B <- dim(size_probability)[2]
+  
+  output <-
+    vapply(1:B, function(x)
+      group_probability[x] * size_probability[size, x], numeric(length(size))) %>%
+    {
+      lapply(size, function(x)
+        c(
+          .[which(size == x) , 1],
+          group_probability[3] * size_probability[0:(x - 1), 2] * size_probability[(x - 1):0, 1],
+          .[which(size == x) , 2]
+        ))
+    } %>%
+    {
+      lapply(1:length(.), function(x)
+        setColnames(.[[x]], paste0(size[x]:0, 0:size[x])))
+    } %>%
+    setColnames(., paste(size))
+  
 }
 
 # Function: {group.observed.cprobability.f} Computes conditional (on the true group) probabilities for observed groups with heterogeneous groups. Accepts inputs of an observed group 'd', a vector of classification probabilities 'p', the number of possible combinations (with repetition) of true groups 'states', and group size 's'. Returns vector with a conditional probability for each true group.
@@ -110,12 +122,16 @@ group.observed.cprobability.f <- function(d, p, states, s){
   if (s < 1) return(rep(1, states))
   
   # Compute probabilities for each combination of true states (possible true groups) and each permutation of observation states in the observed group by raising classification probabilities to the exponent of the numbers of individuals in corresponding observation states and then multiplying by the multinomial coefficient for each permutation.
-  t1 <- likelihood_equations[[paste0("observed.", paste0(d, collapse = "."))]]
-  t2 <- apply(t1[-(1:2)], 1, function(z) prod(p ^ z))
-  t2 <- t2 * t1[[2]]
-  
+
   # Compute overall probabilities for possible true states by summing across permutations of observation states in the observed group with identical index values.
-  vapply(1:max(t1[[1]]), function(x) sum(t2[which(t1[[1]] == x)]), numeric(1))  
+  
+  t1 <- qM(likelihood_equations[[paste0("observed.", paste0(d, collapse = "."))]])
+  
+  t2 <-
+    dapply(t1[, -1], MARGIN = 1, function(z)
+      prod(p ^ z[-1] , z[1])) %>%
+    fsum(., t1[, 1]) 
+  
 }
 
 # Function: {group.observed.cprobability.homogeneous.f} Computes conditional (on true group) probabilities for homogeneous observed groups. Accepts inputs of an observed group 'd', a vector of classification probabilities 'p', and the number of possible combinations (with repetition) of true groups 'states', and group size 's'. Returns vector with a conditional probability for each true group.
@@ -126,41 +142,52 @@ group.observed.cprobability.homogeneous.f <- function(d, p, states, s){
   if (s < 1) return(rep(1, states))
   
   # Compute probabilities for each combination of true states (possible true groups) and each permutation of observation states for the observed group by raising classification probabilities to the exponent of the numbers of individuals in corresponding observation states and then multiplying by the multinomial coefficient for each permutation.
-  t1 <- likelihood_equations[[paste0("observed.", paste0(d, collapse = "."))]]
+  
+  t1 <- qM(likelihood_equations[[paste0("observed.", paste0(d, collapse = "."))]])
+  
   # Row numbers in 'homogeneous' exclude heterogeneous groups 
-  homogeneous <- which(likelihood_equations[[paste0("true.permutations.count.g.", s)]] == 1)
-  homogeneous <- vapply(homogeneous, function(x) which(t1$index == x), numeric(1))
-  t2 <- apply(t1[homogeneous, -(1:2)], 1, function(z) prod(p ^ z))
-  t2 <- t2 * t1[homogeneous, 2]
+  
+  homogeneous <- 
+    which(likelihood_equations[[paste0("true.permutations.count.g.", s)]] == 1) %>%
+    vapply(., function(x) which(t1[, 1] == x), numeric(1)) 
+  
+  t2 <-
+    dapply(t1[homogeneous, -1], MARGIN = 1, function(z)
+      prod(p ^ z[-1] , z[1])) %>%
+    fsum(., t1[homogeneous, 1])
+  
 }
 
-# Function: {mlogit.regress.predict.f} Predicts group-level probabilities for multinomial logistic regression. Accepts input of vector of covariate values 'r', a matrix of beta parameters 'beta' (columns for intercept and slope, rows for each logit regression), and vector with number of species 'n'. Returns a matrix with species-specific (columns 1 to B) predicted probabilities for each covariate value (rows).
+# Function: {mlogit.regress.predict.f} Predicts group-level probabilities for multinomial logistic regression. Accepts input of vector of covariate values 'cov_mat' and a matrix of beta parameters 'beta_mat' (columns for intercept and slope, rows for each logit regression). Returns a matrix with species-specific (columns 1 to B) predicted probabilities for each covariate value (rows).
 
-mlogit.regress.predict.f <- function(r, beta, n) {
-  # Make beta vectors into matrices
-  if (is.vector(beta)) {
-    beta <- matrix(beta, ncol = 2, byrow = TRUE)
-  }
-  distribution <- matrix(0, length(r), n)
-  denom <- matrix(0, n, length(r))
+mlogit.regress.predict.f <- function(cov_mat, beta_mat) {
+
+  # tidy up the inputs to matrices with 2 covariates, 3 beta parameters
   
-  beta <- t(apply(beta, 1, function(x) x))
+  if (!is.matrix(cov_mat))
+    cov_mat <- qM(cov_mat)
+  if (is.vector(beta_mat))
+    beta_mat <- matrix(beta_mat, byrow = TRUE, ncol = 2)
+  else if (is.array(beta_mat))
+    beta_mat <- qM(beta_mat)
   
-  # 'denom' is summation term in denominator
-  denom[1:(n - 1), ] <-
-    t(apply(beta, 1, function(x)
-      exp(x[1] + x[2] * r)))
+  n_cat <- dim(beta_mat)[1] + 1
   
-  denom <- 1 + colSums(denom)
+  # Compute distribution of predicted values by category
   
-  # Compute probabilities for non-baseline categories
-  distribution[, 1:(n - 1)] <-
-    apply(beta, 1, function(x)
-      exp(x[1] + x[2] * r) / denom)
+  distribution <-
+    t(vapply(1:dim(beta_mat)[1], function(b)
+      exp(beta_mat[b, 1] + beta_mat[b, 2] * cov_mat[, 1]), 
+      numeric(dim(cov_mat)[1]) )) %>%
+    {
+      . %r/% (1 + fsum(.))
+    } %>%
+    {
+      t(rbind(., 1 - colsums(.)))
+    } 
   
-  # Add probability for baseline category
-  distribution[ , n] <- 1 - rowSums(distribution)
   distribution
+  
 }
 
 ###############################################################################
@@ -185,12 +212,22 @@ example.1.f <- function(parameters, dat) {
   theta_arr <- array(0, dim = c(3, 3, 4), 
                      dimnames = list(c(paste0("spp_", 1:3)), c(paste0("class_", 1:3)), c("obs_p", paste0("obs_s", 1:3))))
   
-  theta_arr[, , 1] <- c(
-    1 - sum(parameters[1:2]), parameters[c(3, 5, 1)], 1 - sum(parameters[3:4]),  parameters[c(6, 2, 4)], 1 - sum(parameters[5:6])
-  )
-  theta_arr[, , 2:4] <- c(
-    1 - sum(parameters[7:8]), parameters[c(9, 11, 7)], 1 - sum(parameters[9:10]),  parameters[c(12, 8, 10)], 1 - sum(parameters[11:12])
-  )
+  theta_arr[, , 1] <- 
+    c(
+      1 - sum(parameters[1:2]),
+      parameters[c(3, 5, 1)],
+      1 - sum(parameters[3:4]),
+      parameters[c(6, 2, 4)],
+      1 - sum(parameters[5:6])
+    )
+  theta_arr[, , 2:4] <-
+    c(
+      1 - sum(parameters[7:8]),
+      parameters[c(9, 11, 7)],
+      1 - sum(parameters[9:10]),
+      parameters[c(12, 8, 10)],
+      1 - sum(parameters[11:12])
+    )
   
   # True species probabilities (psi) for species 1 and 2
   psi <- c(parameters[13:14])
@@ -204,8 +241,9 @@ example.1.f <- function(parameters, dat) {
   }
   
   # Vector 'psi' now contains true species probabilities for species 1 to 3 and sums to 1
-  psi <- c(parameters[13:14], 1 - sum(parameters[13:14]))
-  names(psi) <- c(paste0("spp_", 1:3))
+  psi <- 
+    c(parameters[13:14], 1 - sum(parameters[13:14])) %>%
+    setColnames(., c(paste0("spp_", 1:3)))
   
   ## Compute likelihood for each unique observation history  ---------
   
@@ -213,12 +251,18 @@ example.1.f <- function(parameters, dat) {
   
   # For each unique observation history, the array 'group_observation_probability' gives probabilities (conditional on possible true species states) for observations states of each observer. 
   # Dimension 1 = unique observation histories, dimension 2 = true species states 1 to 3, dimension 3 = observers 1 to 4
-  group_observation_probability <- array(0, dim = c(nrow_dat, 3, 4), 
-                                         dimnames = list(c(paste0("obs_history_", 1:nrow_dat)), c(paste0("spp_", 1:3)), c("obs_p", paste0("obs_s", 1:3))))
+  
+  group_observation_probability <- 
+    array(0,
+          dim = c(nrow_dat, 3, 4),
+          dimnames = list(c(paste0(
+            "obs_history_", 1:nrow_dat
+          )), c(paste0("spp_", 1:3)), c("obs_p", paste0("obs_s", 1:3))))
   
   # Add conditional probabilities for each observer
   for (obs in 1:4) {
     # Matrix 'dat_obs' contains subset of observed groups for the current observer 'obs'
+    
     dat_obs <- dat[, (((obs - 1) * 3) + 1):(obs * 3)]
     
     group_observation_probability[, , obs] <-
@@ -229,34 +273,44 @@ example.1.f <- function(parameters, dat) {
   
   # For each true species state 1 to 3 (columns), the matrix 'probability_mat' gives probabilities of each unique observation history (rows), computed as the product of probabilities for observation states of each observer and of true species probabilities (psi)
   
-  probability_mat <- matrix(0, nrow_dat, 3,
-                            dimnames = (list(c(paste0("obs_history_", 1:nrow_dat)), c(paste0("spp_", 1:3)) )))
+  probability_mat <-
+    matrix(0, nrow_dat, 3,
+           dimnames = (list(c(
+             paste0("obs_history_", 1:nrow_dat)), 
+             c(paste0("spp_", 1:3)) )))
   
   # Add probabilities for each true species state
+  
   for (b in 1:3) {
-    probability_mat[, b] <- apply(group_observation_probability[, b, ], 1, function(x) 
-      psi[b] * prod(x))
+    probability_mat[, b] <-
+      apply(group_observation_probability[, b,], 1, function(x)
+        psi[b] * prod(x))
   }
   
   # Likelihoods for each unique observation history are the summed probabilities across true species states
-  likelihood <- rowSums(probability_mat)
+  likelihood <- rowsums(probability_mat)
   
   # Compute the -log(likelihood) as the sum of the product of the likelihood and count for each unique observation history. Add penalty term for violating constraint(s).
   sum(dat[, "count"] * -log(likelihood)) + penalty
 }
 
 # Specify initial parameter values. Entered probability values are logit-transformed before analyses.
+
 parameters_ini_1 <-
   qlogis(c(seq(0.2, 0.1, length.out = 12), 0.3, 0.25))
 
 # Specify lower box constraints for parameter values
 constraints_low_1 <- c(rep(-9.21024, 14))
-names(parameters_ini_1) <- names(constraints_low_1) <- c(
-  "theta_p_21",	"theta_p_31",	"theta_p_12",	"theta_p_32",	"theta_p_13",	"theta_p_23",	
-  "theta_s1_21",	"theta_s1_31",	"theta_s1_12",	"theta_s1_32",	"theta_s1_13",	"theta_s1_23",	
-  "psi_1",	"psi_2")
+
+names(parameters_ini_1) <- names(constraints_low_1) <- 
+  c(
+    "theta_p_21", "theta_p_31", "theta_p_12", "theta_p_32", "theta_p_13", "theta_p_23",
+    "theta_s1_21", "theta_s1_31", "theta_s1_12", "theta_s1_32", "theta_s1_13", "theta_s1_23",
+    "psi_1", "psi_2"
+  )
 
 # The 'optim' function solves for parameter values minimizing the -log(likelihood) (plus any penalty terms). The vector 'constraints_low_1' specifies lower box constraints. 
+
 model_1 <-
   optim(
     parameters_ini_1,
@@ -268,8 +322,12 @@ model_1 <-
     lower = constraints_low_1
   )
 
+(model_1)
+
 # Estimated variance-covariance matrix and standard errors of estimated parameters, computed from the Hessian matrix.
+
 model_1_var_covar <- solve(model_1$hessian)
+
 model_1_estimates_se <- 
   matrix(
     c(model_1$par,
@@ -279,7 +337,10 @@ model_1_estimates_se <-
     dimnames = list(c("estimate", "SE"), names(model_1$par))
   )
 
+(model_1_estimates_se)
+
 # The 'DeltaMethod' function in the optional R library 'mrds' conveniently estimates variances and standard errors when back-transforming estimated logit parameters to probabilities. 
+
 model_1_estimates_probabilities_se <-
   matrix(
     c(plogis(model_1$par),
@@ -295,6 +356,7 @@ model_1_estimates_probabilities_se <-
     dimnames = list(c("estimate", "SE"), names(model_1$par))
   )
 
+(model_1_estimates_probabilities_se)
 
 ###############################################################################
 #           Example 2: 2 species, homogeneous groups
@@ -316,63 +378,82 @@ example.2.f <- function(parameters, dat) {
   ## Data and parameter import, formatting ----------
   
   # Summarize group sizes from data and from group size parameters
+  
   g <- unique(dat$group_size) # Observed group sizes
   g1 <- sum(dat$group_size == 1) # Count of unique observation histories with group size = 1
   g_spp <- parameters[4:5] # Mean group size parameters for species 1 and 2
   
   # Back-transform probability parameters from logit scale to probability scale
+  
   parameters <- plogis(parameters[1:3])
   
   # Vector 'psi' contains true species probabilities for species 1 and 2
-  psi <- c(parameters[3], 1 - parameters[3])
-  names(psi) <- c(paste0("spp_", 1:2))
+  
+  psi <- 
+    c(parameters[3], 1 - parameters[3]) %>%
+    setColnames(c(paste0("spp_", 1:2)))
   
   # Matrix 'theta_mat' summarizes classification probabilities (theta) of each observer as a vector for efficient computation
   # Dimension 1 (column) = classification probabilities, dimension 2 (row) = observers 1 to 4 (4 secondary observers with identical classification probabilities)
   
-  theta_mat <- matrix(
-    rep(c(1 - parameters[1], parameters[2], parameters[1], 1 - parameters[2])
-        , 4)
-    , ncol = 4, byrow = TRUE,
-    dimnames = list(c(paste0("obs_s", 1:4)), c("theta_11", "theta_12", "theta_21", "theta_22")))
+  theta_mat <- 
+    matrix(
+      rep(c(1 - parameters[1], parameters[2], parameters[1], 1 - parameters[2]), 4),
+      ncol = 4,
+      byrow = TRUE,
+      dimnames = list(c(paste0("obs_s", 1:4)), 
+                      c("theta_11", "theta_12", "theta_21", "theta_22"))
+    )
   
   # Vector 'lambda' contains lambda parameters (defining mean group size) of a zero-truncated Poisson distribution for species 1 and 2
   lambda <- rep(0, 2)
+  
   lambda[1:2] <-
     vapply(g_spp[1:2], function(x)
       optimize(ztpois.f, interval = c(0.000001, 100), size = x)$minimum, numeric(1))
+  
   names(lambda) <- c(paste0("spp_", 1:2))
   
   ## For each species, compute group probabilities and probability mass of group sizes ----------
   
   # Matrix 'group_size_probmass' contains probability mass (mu) of group sizes (rows, from 1 to the maximum observed group size) for each true species state 1 to 2 (column).
+  
   group_size_probmass <-
     matrix(vapply(lambda, function(x)
       ztpois.probmass.f(x, g), numeric(max(g))),
-      ncol = 2)
-  dimnames(group_size_probmass) <- list(c(paste0("group_size_", 1:dim(group_size_probmass)[1])), c(paste0("spp_", 1:2)))
+      ncol = 2) %>%
+    setDimnames(., list(c(paste0("group_size_", 1:dim(.)[1])), 
+                        c(paste0("spp_", 1:2))))
   
   # Function 'group_probability.constant.f' calculates group probabilities (pi) for each true species state, with the '0' function argument specifying homogeneous groups.
-  output <- group.probability.constant.f(psi, 0, g_spp)
+  
+  output <- 
+    group.probability.constant.f(psi, 0, g_spp)
+  
   group_probability <- output[[1]]
   
   ## Compute likelihood for each unique observation history ----------
   # Unique observation histories with group size = 1
   
   # Vector 'likelihood' for probabilities of each unique observation history
+  
   likelihood <- numeric(dim(dat)[1])
   
   # For each unique observation history, array 'group_observation_probability' contains conditional (on possible true species states) probabilities for observed groups of each observer. 
   # Dimension 1 (row) = unique observation histories, dimension 2 (column) = true species state 1 to 2, dimension 3 (matrix) = observers 1 to 4 (4 identical secondary)
   
-  group_observation_probability <- array(0, dim = c(g1, 2, 4),
-                                         dimnames = list(c(paste0("obs_history_", 1:g1)), c(paste0("spp_", 1:2)), c(paste0("obs_s", 1:4))) )
+  group_observation_probability <- 
+    array(0, dim = c(g1, 2, 4),
+          dimnames = list(c(paste0("obs_history_", 1:g1)), 
+                          c(paste0("spp_", 1:2)), c(paste0("obs_s", 1:4))))
   
   # Add conditional probabilities for observed groups of each observer.
   for (obs in 1:4) {
+    
     # Matrix 'dat_obs' contains subset of observed groups for the current observer 'obs' and group size = 1
-    dat_obs <- dat[1:g1, ] %>% 
-      select(all_of((((obs - 1) * 2) + 1):(obs * 2)))
+    
+    dat_obs <- 
+      fselect(dat[1:g1, ], (((obs - 1) * 2) + 1):(obs * 2))
     
     group_observation_probability[, , obs] <- 
       t(apply(dat_obs, 1, function(x)
@@ -382,27 +463,38 @@ example.2.f <- function(parameters, dat) {
   
   # For each true species state 1 to 2 (columns), matrix 'probability_mat' gives probabilities of each unique observation history (rows), calculated as the product of probabilities for observed groups of each observer and of true species probabilities (psi)
   
-  probability_mat <- matrix(0, g1, 2,
-                            dimnames = (list(c(paste0("obs_history_", 1:g1)), c(paste0("spp_", 1:2)) )))
+  probability_mat <-
+    matrix(0, g1, 2,
+           dimnames = (list(c(paste0("obs_history_", 1:g1)), 
+                            c(paste0("spp_", 1:2)))) )
   
   # Add probabilities for each true species state b
+  
   for (b in 1:2) {
-    probability_mat[, b] <- apply(group_observation_probability[, b, ], 1, function(x) 
-      group_probability[b] * group_size_probmass[1, b] * prod(x))
+    probability_mat[, b] <-
+      apply(group_observation_probability[, b,], 1, function(x)
+        group_probability[b] * group_size_probmass[1, b] * prod(x))
   }
   
   # Likelihoods for each unique observation history are the summed probabilities across true species states
-  likelihood[1:g1] <- rowSums(probability_mat)
+  
+  likelihood[1:g1] <- rowsums(probability_mat)
   
   # Unique observation histories with group sizes > 1 ---------
   
   # Matrix 'n_group_size' gives the count of unique observation histories 'n' for each unique 'group_size'
-  n_group_size <-  dat  %>% count(group_size)
+  
+  n_group_size <-  
+    fgroup_by(dat, group_size) %>%
+    fselect(., "count") %>%
+    fnobs(.)
   
   # Compute likelihoods for each group size > 1
+  
   for (i in g[g > 1]) {
     
     # For the current group size, 'n_i' and 'rows_i' give the count of unique observation histories and a vector of row numbers in 'dat'
+    
     n_i <- n_group_size[[pmatch(i, n_group_size$group_size), 2]]
     rows_i <- which(dat$group_size == i) 
     
@@ -410,40 +502,41 @@ example.2.f <- function(parameters, dat) {
     
     probability_mat <-
       matrix(
-        c(
-          rep(numeric(1), n_i * 2 * 4),
-          rep(group_size_probmass[i, ] * group_probability, n_i)
-        ), 
+        c(rep(numeric(1), n_i * 2 * 4),
+          rep(group_size_probmass[i, ] * group_probability, n_i)), 
         ncol =  5, 
-        dimnames = list(c(paste0("group_observed_", rep(rows_i, each = 2))), c(paste0("obs_s", 1:4), "psi")))
+        dimnames = list(c(paste0("group_observed_", rep(rows_i, each = 2))), 
+                        c(paste0("obs_s", 1:4), "psi")))
     
     # Add conditional probabilities for observed groups of each observer.
+    
     for (obs in 1:4) {
-      # Matrix 'dat_tmp' contains subset of observed groups for the current observer 'obs' and group size 'i'
-      dat_tmp <- dat[rows_i, ] %>%
-        select(all_of((((obs - 1) * 2) + 1):(obs * 2)))
       
-      observation_sum <- rowSums(dat_tmp)
-      probability_mat[, obs] <- 
-        as.vector(vapply(1:n_i, function(x) 
-          group.observed.cprobability.homogeneous.f(dat_tmp[x, ], theta_mat[obs, ], 2, observation_sum[x]),
+      # Matrix 'dat_tmp' contains subset of observed groups for the current observer 'obs' and group size 'i'
+      
+      dat_tmp <-
+        qM(fselect(dat[rows_i, ], c( (((obs - 1) * 2) + 1):(obs * 2) )))
+      
+      observation_sum <- rowsums(dat_tmp)
+      
+      probability_mat[, obs] <-
+        as.vector(vapply(1:n_i, function(x)
+          group.observed.cprobability.homogeneous.f(dat_tmp[x,],
+                                                    theta_mat[obs,],
+                                                    2,
+                                                    observation_sum[x]),
           numeric(2))) 
     }
     
     # Integers in 'index' associate rows in 'probability_mat' with unique observation histories.  
+    
     index <- rep(1:n_i, each = 2)
     
     # Add likelihoods for the current group size to 'likelihood'. Likelihoods for each unique observation history are calculated as the product of probabilities in each row of 'probability_mat' summed across all possible combinations of true groups for each unique observation history specified by 'index'. 
     
     likelihood[rows_i] <-
-      as_tibble(probability_mat) %>%
-      transmute(.,
-                index = index,
-                b_product = apply(probability_mat, 1, function(x) prod(x))) %>%
-      group_by(index)  %>%
-      summarise(likelihood = sum(b_product)) %>%
-      select(likelihood) %>%
-      unlist(.)
+      rowprods(probability_mat) %>%
+      fsum(., index)
   }
   
   # Compute the -log(likelihood) as the sum of the product of the likelihood and count for each unique observation history. 
@@ -451,15 +544,18 @@ example.2.f <- function(parameters, dat) {
 }
 
 # Specify initial parameter values. Probabilities (thetas, psi) are logit-transformed before analyses, and group size parameters are mean group size.
+
 parameters_ini_2 <- c(qlogis(c(0.2, 0.1, 0.4)), 1.2, 1.3)
 
 # Specify lower and upper constraints for parameter values. Upper constraints of infinity (Inf) result in estimates without upper constraints. 
+
 constraints_low_2 <- c(rep(-9.2, 3), rep(1.002, 2))
 constraints_up_2 <- c(rep(-1.4, 2), rep(Inf, 3))
 names(parameters_ini_2) <- names(constraints_low_2) <- names(constraints_up_2) <- 
   c("theta_s1_21",	"theta_s1_12", 	"psi_1",	"g_1",	"g_2")
 
 # The 'optim' function solves for parameter values minimizing the -log(likelihood). Vectors 'constraints_low_2' and 'constraints_up_2' specify lower and upper box constraints. 
+
 model_2 <- 
   optim(
     parameters_ini_2,
@@ -471,6 +567,8 @@ model_2 <-
     lower = constraints_low_2,
     upper = constraints_up_2
   )
+
+(model_2)
 
 ###############################################################################
 #           Example 3: Covariate predicting true species probabilities 
@@ -488,23 +586,42 @@ example.3.f <- function(parameters, dat) {
   ## Parameter import and formatting ---------
   
   # Extract regression coefficients predicting true species probability to vector 'psi_betas'
+  
   psi_betas <- parameters[1:2]
   
   # Back-transform probability parameters from logit scale to probability scale
+  
   parameters <- plogis(parameters[3:10])
   
   # Array 'theta_arr' contains matrices with classification probabilities (theta) for each observer. 
   # Dimension 1 (column) = true species states 1 to 2, dimension 2 (row) = observation states 1 to 3, dimension 3 (matrix) = observers 1 to 5 (1 primary, 4 secondary with identical classification probabilities)
   
-  theta_arr <- array(0, c(2, 3, 5), 
-                     dimnames = list(c(paste0("spp_", 1:2)), c(paste0("class_", 1:3)), c("obs_p", paste0("obs_s", 1:4))))
-  theta_arr[, , 1] <- c(1 - sum(parameters[1:2]), parameters[c(3, 1)], 1 - sum(parameters[3:4]), parameters[c(2, 4)])
-  theta_arr[, , 2:5] <- c(1 - sum(parameters[5:6]), parameters[c(7, 5)], 1 - sum(parameters[7:8]), parameters[c(6, 8)])
+  theta_arr <-
+    array(0, c(2, 3, 5),
+          dimnames = list(c(paste0("spp_", 1:2)), 
+                          c(paste0("class_", 1:3)), 
+                          c("obs_p", paste0("obs_s", 1:4))))
+  
+  theta_arr[, , 1] <-
+    c(1 - sum(parameters[1:2]), 
+      parameters[c(3, 1)],
+      1 - sum(parameters[3:4]),
+      parameters[c(2, 4)])
+  
+  theta_arr[, , 2:5] <-
+    c(1 - sum(parameters[5:6]),
+      parameters[c(7, 5)],
+      1 - sum(parameters[7:8]),
+      parameters[c(6, 8)])
   
   # Matrix 'psi_group_mat' gives group-level true species probabilities for each true species state predicted from multinomial logit regression coefficients and group-level covariate values
-  psi_group_mat <- mlogit.regress.predict.f(dat$covariate_psi, psi_betas, 2)
+  
   nrow_dat <- dim(dat)[1]
-  dimnames(psi_group_mat) <- list( c(paste0("obs_history_", 1:nrow_dat)), c("psi_1", "psi_2"))
+  
+  psi_group_mat <- 
+    mlogit.regress.predict.f(dat$covariate_psi, psi_betas) %>%
+    setDimnames(., list( c(paste0("obs_history_", 1:nrow_dat)), 
+                         c("psi_1", "psi_2")))
   
   ## Compute likelihood for each unique observation history ---------
   
@@ -512,18 +629,21 @@ example.3.f <- function(parameters, dat) {
   
   probability_mat <-
     matrix(
-      c(
-        rep(numeric(1), nrow_dat * 2 * 5),
-        t(psi_group_mat)
-      )
-      , ncol =  6,
-      dimnames = list(c(paste0("obs_history_", rep(1:nrow_dat, each = 2)))    , c("obs_p", paste0("obs_s", 1:4), "psi"))
+      c(rep(numeric(1), nrow_dat * 2 * 5),
+        t(psi_group_mat)), 
+      ncol =  6,
+      dimnames = list(c(paste0("obs_history_", rep(1:nrow_dat, each = 2))), 
+                      c("obs_p", paste0("obs_s", 1:4), "psi"))
     )
   
   # Add conditional probabilities of observation states for each observer
+  
   for (obs in 1:5) {
+    
     # Matrix 'dat_obs' contains subset of observations for the current observer 'obs'
-    dat_obs <- select(dat, all_of((((obs - 1) * 3) + 1):(obs * 3)))
+    
+    dat_obs <-
+      fselect(dat, (((obs - 1) * 3) + 1):(obs * 3))
     
     probability_mat[, obs] <-
       as.vector(apply(dat_obs, 1, function(x)
@@ -532,29 +652,28 @@ example.3.f <- function(parameters, dat) {
   }
   
   # Integers in 'index' associate rows in 'probability_mat' with unique observation histories 
-  index <- rep(1:nrow_dat, each = 2)
+  
+  index <- 
+    rep(1:nrow_dat, each = 2)
   
   # Likelihoods for each unique observation history are calculated as the product of probabilities in each row of 'probability_mat' summed across all possible true species states for each unique observation history indexed by 'index'
   
   likelihood <-
-    as_tibble(probability_mat) %>%
-    transmute(.,
-              index = index,
-              b_product = apply(probability_mat, 1, function(x) prod(x))) %>%
-    group_by(index)  %>%
-    summarise(likelihood = sum(b_product)) %>%
-    select(likelihood) %>%
-    unlist(.)
+    rowprods(probability_mat) %>%
+    fsum(., index)
   
   # Compute the -log(likelihood) as the sum of likelihoods for each unique observation history. 
+  
   sum(-log(likelihood))
 }
 
 # Specify initial parameter values. Probabilities (thetas) are logit-transformed before analyses.
+
 parameters_ini_3 <-
   c(-1, 0.5, qlogis(seq(0.25, 0.1, length.out = 8)))
 
 # Specify lower constraints for parameter values
+
 constraints_low_3 <- c(-5, -5, rep(-9.2, 8))
 names(parameters_ini_3) <- names(constraints_low_3) <- c(
   "b0_psi_1",	"b1_psi_1",	
@@ -563,6 +682,7 @@ names(parameters_ini_3) <- names(constraints_low_3) <- c(
 )
 
 # The 'optim' function solves for parameter values minimizing the -log(likelihood). Vector 'constraints_low_3' specifies lower box constraints. 
+
 model_3 <-
   optim(
     parameters_ini_3,
@@ -574,6 +694,8 @@ model_3 <-
     lower = constraints_low_3,
     control = list(trace = 3)
   )
+
+(model_3)
 
 ###############################################################################
 #           Example 4: Covariate predicting classification, heterogeneous groups
@@ -598,11 +720,15 @@ example.4.f <- function(parameters, dat) {
   ## Data and parameter import, formatting ---------
   
   # Summarize group sizes
+  
   g <- unique(dat$group_size) # Observed group sizes
   g_spp <- parameters[10:11] # Mean group size parameters for species 1 and 2
   
   # True species probabilities (psi) for species 1 and 2 and heterogeneous group probability (pi) are back-transformed from logit scale to probability scale
-  psi <- c(plogis(parameters[9]), 1 - plogis(parameters[9]))
+  
+  psi <- 
+    c(plogis(parameters[9]), 1 - plogis(parameters[9]))
+  
   pi <- plogis(parameters[12])
   
   # Array 'theta_betas_arr' organizes regression coefficients (betas) predicting classification probabilities (theta), with a matrix for each observer
@@ -613,7 +739,9 @@ example.4.f <- function(parameters, dat) {
       c(parameters[1:2], parameters[5:6], parameters[3:4], parameters[7:8]),
       dim = c(2, 2, 2),
       dimnames = (list(
-        c(paste0("spp_", 1:2)),  c(paste0("beta_", 0:1))  , c("obs_p", "obs_s")
+        c(paste0("spp_", 1:2)),  
+        c(paste0("beta_", 0:1)) , 
+        c("obs_p", "obs_s")
       ))
     )
   
@@ -621,61 +749,91 @@ example.4.f <- function(parameters, dat) {
   # Dimension 1 (column) = classification probabilities, dimension 2 (row) = unique observation histories, dimension 3 (matrix) = observers 1 to 5 (1 primary, 4 identical secondary)
   
   nrow_dat <- dim(dat)[1]
-  theta_arr <- array(0, dim = c(4, nrow_dat, 5),
-                     dimnames = list(
-                       c("theta_p_11",	"theta_p_12",	"theta_s1_21",	"theta_s1_22"),
-                       c(paste0("obs_history_", 1:nrow_dat)),
-                       c("obs_p", paste0("obs_s", 1:4))
-                     ))
+  
+  theta_arr <- 
+    array(0,
+          dim = c(4, nrow_dat, 5),
+          dimnames = list(
+            c("theta_p_11",	"theta_p_12",	"theta_s1_21",	"theta_s1_22"),
+            c(paste0("obs_history_", 1:nrow_dat)),
+            c("obs_p", paste0("obs_s", 1:4))
+          ))
   
   for (b in 1:2) {
-    theta_arr[c(3, 1), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[1, , b, drop = FALSE], 2))
-    theta_arr[c(2, 4), , b] <- t(mlogit.regress.predict.f(dat$covariate_theta, theta_betas_arr[2, , b, drop = FALSE], 2))
+    theta_arr[c(3, 1), , b] <- 
+      t(mlogit.regress.predict.f(dat$covariate_theta, 
+                                 theta_betas_arr[1, , b, drop = FALSE]))
+    
+    theta_arr[c(2, 4), , b] <- 
+      t(mlogit.regress.predict.f(dat$covariate_theta, 
+                                 theta_betas_arr[2, , b, drop = FALSE]))
   }
   
   # Secondary observers are assumed to have identical classification probabilities
+  
   theta_arr[, , 5] <- theta_arr[, , 4] <- theta_arr[, , 3]  <- theta_arr[,  , 2]
   
   # Vector 'lambda' contains lambda parameters (defining mean group size) of a zero-truncated Poisson distribution for true species states 1 to 2.
+  
   lambda <- rep(0, 2)
+  
   lambda[1:2] <-
     vapply(g_spp[1:2], function(x)
-      optimize(ztpois.f, interval = c(0.000001, 100), size = x)$minimum, numeric(1))
-  names(lambda) <- c(paste0("spp_", 1:2))
+      optimize(ztpois.f, interval = c(0.000001, 100), size = x)$minimum, numeric(1)) %>%
+    setColnames(., c(paste0("spp_", 1:2)))
   
   ## Compute group probabilities and group size probability mass for each species ----------
   
   # Matrix 'group_size_probmass' contains probability mass (mu) for each group size (row, from 1 to the maximum observed group size) and for each true species state 1 to 2 (column)
+  
   group_size_probmass <-
     matrix(vapply(lambda, function(x)
       ztpois.probmass.f(x, g), numeric(max(g))),
-      ncol = 2)
-  dimnames(group_size_probmass) <- list(c(paste0("group_size_", 1:dim(group_size_probmass)[1])), c(paste0("spp_", 1:2)))
+      ncol = 2) %>%
+    setDimnames(., list(c(paste0("group_size_", 1:dim(.)[1])), 
+                        c(paste0("spp_", 1:2))))
   
   # Function 'group.probability.constant.f' computes group probabilities (pi) for each true species, assuming a constant heterogeneous group probability parameter (pi.12) as described in the companion article
   # Vector 'group_probability' gives group probabilities for homogeneous groups of species 1 to 2 (pi.1 and pi.2) and for heterogeneous groups (pi.12). Penalty term 'penalty' is >0 if the heterogeneous group probability takes an inadmissible value (i.e., greater than the available groups).
-  output <- group.probability.constant.f(psi, pi, g_spp)
-  group_probability <- output[[1]]
+  
+  output <- 
+    group.probability.constant.f(psi, pi, g_spp)
+  
+  group_probability <- output[[1]] %>%
+    setColnames(., c("pi_1", "pi_2", "pi_12"))
+  
   penalty <- output[[2]]
-  names(group_probability) <- c("pi_1", "pi_2", "pi_12")
   
   ## Compute likelihood for each unique observation history ----------
   
   # Vector 'likelihood' for the likelihood of each unique observation history
+  
   likelihood <- numeric(nrow_dat)
   
   # Matrix 'n_group_size' gives the count of unique observation histories 'n' for each unique 'group_size'
-  n_group_size <-  dat  %>% count(group_size) 
+  
+  n_group_size <-  
+    fgroup_by(dat, group_size) %>%
+    fselect(., "covariate_theta") %>%
+    fnobs(.)
   
   # List 'group.true.probability' contains probabilities for each possible true group
   # List elements (named with each group size) are vectors with probabilities for each possible true group for that group size (named by the counts of species 1 and 2). 
-  group.true.probability <- group.true.probability.key.f(group_probability, group_size_probmass, g)
+  
+  group.true.probability <- 
+    group.true.probability.key.f(group_probability, group_size_probmass, g)
   
   # Compute likelihoods for each observed group size
+  
   for (i in g) {
+    
     # For the current group size, 'n_i' and 'rows_i' give the count of unique observation histories and a vector of row numbers in 'dat'
-    n_i <- n_group_size[[pmatch(i, n_group_size$group_size), 2]]
+    
+    n_i <- 
+      n_group_size[[pmatch(i, n_group_size$group_size), 2]]
+    
     rows_i <- which(dat$group_size == i) 
+    
     B_states <- length(group.true.probability[[paste(i)]]) # Number of combinations of true species states for the current group size 
     
     # Matrix 'probability_mat' contains conditional probabilities for observed groups of each observer and probabilities for possible true groups. For each unique observation history, separate rows correspond to each possible true group.  
@@ -685,44 +843,47 @@ example.4.f <- function(parameters, dat) {
       matrix(c(rep(numeric(1), n_i * B_states * 5),
                rep(group.true.probability[[paste(i)]], n_i)),
              ncol =  6,
-             dimnames = list(c(paste0(
-               "obs_history_", rep(rows_i, each = B_states))), 
-               c("obs_p", paste0("obs_s", 1:4), "psi")))
+             dimnames = list(c(paste0("obs_history_", rep(rows_i, each = B_states))), 
+                             c("obs_p", paste0("obs_s", 1:4), "psi")))
     
     # Add condition probabilities for observed groups of each observer
+    
     for (obs in 1:5) {
-      # Matrix 'data.tmp' contains subset of observed groups for the current observer 'obs' and group size 'i'
-      dat_tmp <- dat[rows_i, ] %>%
-        select(all_of((((obs - 1) * 2) + 1):(obs * 2)))
       
-      observation_sum <- rowSums(dat_tmp)
+      # Matrix 'data.tmp' contains subset of observed groups for the current observer 'obs' and group size 'i'
+      
+      dat_tmp <- 
+        qM(fselect(dat[rows_i, ], (((obs - 1) * 2) + 1):(obs * 2)) )
+      
+      observation_sum <- rowsums(dat_tmp)
+      
       probability_mat[, obs] <- 
         as.vector(vapply(1:n_i, function(x) 
-          group.observed.cprobability.f(dat_tmp[x, ], theta_arr[, rows_i[x], obs], B_states, observation_sum[x]),
+          group.observed.cprobability.f(dat_tmp[x, ], 
+                                        theta_arr[, rows_i[x], obs], 
+                                        B_states, 
+                                        observation_sum[x]),
           numeric(B_states))) 
     }
     
     # Integers in 'index' associate rows in 'probability_mat' with unique observation histories
+    
     index <- rep(1:n_i, each = B_states)
     
     # Add likelihoods for the current group sizes to 'likelihood'. Likelihoods for each unique observation history are computed as the product of probabilities in each row of 'probability_mat' summed across all possible combinations of true groups for each unique observation history indexed by 'index'.
     
     likelihood[rows_i] <-
-      as_tibble(probability_mat) %>%
-      transmute(.,
-                index = index,
-                b_product = apply(probability_mat, 1, function(x) prod(x))) %>%
-      group_by(index)  %>%
-      summarise(likelihood = sum(b_product)) %>%
-      select(likelihood) %>%
-      unlist(.)
+      rowprods(probability_mat) %>%
+      fsum(., index)
   }
   
   # Compute the -log(likelihood) as the sum of likelihoods for each unique observation history. Add penalty term for violating constraint(s).
+  
   sum(-log(likelihood)) + penalty
 }
 
 # Specify initial parameter values. True species probability (psi) and heterogeneous group probability (pi) are logit-transformed before analyses, and group size parameters are mean group size.
+
 parameters_ini_4 <-
   c(c(seq(-3,-5, length.out = 4), 
       seq(-1, 2, length.out = 4), 
@@ -731,13 +892,20 @@ parameters_ini_4 <-
     qlogis(0.01))
 
 # Specify lower constraints for parameter values
+
 constraints_low_4 <- c(rep(-9.2, 4), rep(-5, 4), -9.2, rep(1.002, 2), -7)
-names(parameters_ini_4) <- names(constraints_low_4) <- c(
-  "b0_theta_p_21",	"b0_theta_p_12",	"b0_theta_s1_21",	"b0_theta_s1_12",	"b1_theta_p_21",	"b1_theta_p_12",	"b1_theta_s1_21",	"b1_theta_s1_12",	
-  "psi_1",	"g_1",	"g_2", "pi_12"
-)
+
+names(parameters_ini_4) <- names(constraints_low_4) <- 
+  c(
+    "b0_theta_p_21", "b0_theta_p_12", "b0_theta_s1_21", "b0_theta_s1_12",
+    "b1_theta_p_21", "b1_theta_p_12", "b1_theta_s1_21", "b1_theta_s1_12",
+    "psi_1",
+    "g_1","g_2",
+    "pi_12"
+  )
 
 # The 'optim' function solves for parameter values minimizing the -log(likelihood). Vector 'constraints_low_4' specifies lower box constraints. 
+
 model_4 <- 
   optim(
     parameters_ini_4,
@@ -749,6 +917,8 @@ model_4 <-
     lower = constraints_low_4,
     control = list(trace = 3)
   )
+
+(model_4)
 
 ###############################################################################
 #           Example 5: Distinct observers
@@ -764,21 +934,27 @@ example.5.f <- function(parameters, dat) {
   ## Data and parameter import, formatting ----------
   
   # Back-transform probability parameters from logit scale to probability scale
+  
   parameters <- plogis(parameters)
   
   # Array 'theta_arr' contains matrices with classification probabilities (theta) for each observer
   # Dimension 1 (column) = true species states 1 to 2, dimension 2 (row) = observation states 1 to 2, dimension 3 (matrix) = observers 1 to 4 (1 primary, 3 secondary with distinct classification probabilities)
   
   theta_arr <- array(0, dim = c(2, 2, 4), 
-                     dimnames = list(c(paste0("spp_", 1:2)), c(paste0("class_", 1:2)), c("obs_p", paste0("obs_s", 1:3))))
+                     dimnames = list(c(paste0("spp_", 1:2)), 
+                                     c(paste0("class_", 1:2)), 
+                                     c("obs_p", paste0("obs_s", 1:3))))
+  
   theta_arr[, , 1] <- c(1 - parameters[1], parameters[2:1], 1 - parameters[2])
   theta_arr[, , 2] <- c(1 - parameters[3], parameters[4:3], 1 - parameters[4])
   theta_arr[, , 3] <- c(1 - parameters[5], parameters[6:5], 1 - parameters[6])
   theta_arr[, , 4] <- c(1 - parameters[7], parameters[8:7], 1 - parameters[8])
   
   # True species probabilities (psi) for true species states 1 and 2
-  psi <- c(parameters[9], 1 - parameters[9])
-  names(psi) <- c(paste0("spp_", 1:2))
+  
+  psi <- 
+    c(parameters[9], 1 - parameters[9]) %>%
+    setColnames(c(paste0("spp_", 1:2)))
   
   ## Compute likelihoods for unique observation histories ----------
   
@@ -786,13 +962,22 @@ example.5.f <- function(parameters, dat) {
   # Dimension 1 = unique observation histories, dimension 2 = true species states 1 to 2, dimension 3 = observers 1 to 4 (1 primary, 3 distinct secondary)
   
   nrow_dat <- dim(dat)[1]
-  group_observation_probability <- array(0, dim = c(nrow_dat, 2, 4),
-                                         dimnames = list(c(paste0("obs_history_", 1:nrow_dat)), c(paste0("spp_", 1:2)), c("obs_p", paste0("obs_s", 1:3))))
+  
+  group_observation_probability <- 
+    array(0,
+          dim = c(nrow_dat, 2, 4),
+          dimnames = list(c(paste0("obs_history_", 1:nrow_dat)), 
+                          c(paste0("spp_", 1:2)), 
+                          c("obs_p", paste0("obs_s", 1:3))) )
   
   # Add conditional probabilities for each observer
+  
   for (obs in 1:4) {
+    
     # Matrix 'dat_obs' contains subset of observed groups for the current observer 'obs'
-    dat_obs <- select(dat, all_of((((obs - 1) * 2) + 1):(obs * 2)))
+    
+    dat_obs <-
+      qM( fselect(dat, (((obs - 1) * 2) + 1):(obs * 2)) )
     
     group_observation_probability[, , obs] <-
       t(apply(dat_obs, 1, function(x)
@@ -802,34 +987,48 @@ example.5.f <- function(parameters, dat) {
   
   # For each true species state 1 to 3 (columns), matrix 'probability_mat' gives probabilities for each unique observation history (rows), calculated as the product of probabilities for observed groups of each observer and of true species probabilities (psi)
   
-  probability_mat <- matrix(0, nrow_dat, 2,
-                            dimnames = (list(c(paste0("obs_history_", 1:nrow_dat)), c(paste0("spp_", 1:2)) )))
+  probability_mat <- 
+    matrix(0, nrow_dat, 2,
+           dimnames = (list(c(paste0("obs_history_", 1:nrow_dat)), 
+                            c(paste0("spp_", 1:2)) )) )
   
   # Add probabilities for each true species state
+  
   for (b in 1:2) {
-    probability_mat[, b] <- apply(group_observation_probability[, b, ], 1, function(x) 
-      psi[b] * prod(x))
+    probability_mat[, b] <-
+      apply(group_observation_probability[, b,], 1, function(x)
+        psi[b] * prod(x))
   }
   
   # Likelihoods for each unique observation history are the summed probabilities across true species states
-  likelihood <- rowSums(probability_mat)
+  
+  likelihood <- rowsums(probability_mat)
   
   # Compute the -log(likelihood) as the sum of the product of the likelihood and count for each unique observation history. 
+  
   sum(dat[, "count"] * -log(likelihood))
 }
 
 # Specify initial parameter values. Probabilities (theta, psi) are logit-transformed before analyses.
-parameters_ini_5 <- qlogis(c(seq(0.2, 0.1, length.out = 8), 0.4))
+
+parameters_ini_5 <- 
+  qlogis(c(seq(0.2, 0.1, length.out = 8), 0.4))
 
 # Specify lower constraints for parameter values
+
 constraints_low_5 <- c(rep(-9.21024, 9))
-names(parameters_ini_5) <- names(constraints_low_5) <- c(
-  "theta_p_21",	"theta_p_12",	
-  "theta_s1_21",	"theta_s1_12",	"theta_s2_21",	"theta_s2_12",	"theta_s3_21",	"theta_s3_12",	
-  "psi_1"
-)
+
+names(parameters_ini_5) <- names(constraints_low_5) <- 
+  c(
+    "theta_p_21", "theta_p_12",
+    "theta_s1_21","theta_s1_12",
+    "theta_s2_21","theta_s2_12",
+    "theta_s3_21", "theta_s3_12",
+    "psi_1"
+  )
 
 # The 'optim' function solves for parameter values minimizing the -log(likelihood). Vector 'constraints_low_5' specifies lower box constraints.
+
 model_5 <-
   optim(
     parameters_ini_5,
@@ -840,3 +1039,6 @@ model_5 <-
     method = c("L-BFGS-B"),
     lower = constraints_low_5
   )
+
+(model_5)
+
