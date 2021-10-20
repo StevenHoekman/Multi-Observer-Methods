@@ -1,5 +1,5 @@
 # Supplemental_functions.R
-# Supplemental functions for analyses and summaries, version 1.2.1
+# Supplemental functions for analyses and summaries, version 1.2.3
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code with supplemental functions for simulation analyses for estimating uncertain identification using multi-observer methods. These functions provide supplemental services such as: drawing random samples from probability distributions; computing probabilities and other values used in likelihood computations; and generating, formatting, summarizing, and error-checking simulation data and statistical output. Functions are grouped according by purpose. Comments with each function describe its purpose, inputs and outputs, and functioning of the code. Code developed and tested in R version 4.1.
@@ -131,7 +131,7 @@ group.observed.cprobability.f <- function(d, p, states, s){
 
   # Compute overall probabilities for possible true groups by summing across permutations of observation states in the observed group with identical index values
   
-  t1 <- qM(likelihood.equations[[paste0("observed.", paste0(d, collapse = "."))]])
+  t1 <- likelihood.equations[[paste0("observed.", paste0(d, collapse = "."))]]
   
   t2 <-
     dapply(t1[, -1], MARGIN = 1, function(z)
@@ -148,7 +148,7 @@ group.observed.cprobability.homogeneous.f <- function(d, p, states, s){
   # For each of 2 possible true groups and each permutation of possible observation states, compute probabilities by 1) raising classification probabilities to the power of the number of classifications in corresponding observation states and 2) then multiplying by the multinomial coefficient for each permutation.
   # For observed group 'd', matrix 't1' contains an 'index' value corresponding to each possible true group, a multinomial coefficient term 'coefficient', and additional columns containing vectors representing permutations of classifications giving rise to each observed group.
   
-  t1 <- qM(likelihood.equations[[paste0("observed.", paste0(d, collapse = "."))]])
+  t1 <- likelihood.equations[[paste0("observed.", paste0(d, collapse = "."))]]
   
   # Row numbers in 'homogeneous' exclude heterogeneous groups 
   
