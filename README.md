@@ -1,5 +1,5 @@
 [![DOI](https://zenodo.org/badge/342997344.svg)](https://zenodo.org/badge/latestdoi/342997344)
-![Version]( https://img.shields.io/badge/version-1.2.2-blue)
+![Version]( https://img.shields.io/badge/version-1.2.3-blue)
 [![License](https://img.shields.io/badge/License-BSD%203--Clause-blueviolet.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![R version]( https://img.shields.io/badge/R%20version-4.1-orange)](https://cran.r-project.org/)
 
