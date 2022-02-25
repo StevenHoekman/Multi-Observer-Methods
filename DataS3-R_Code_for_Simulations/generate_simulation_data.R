@@ -1,5 +1,5 @@
 # generate_simulation_data.R
-# Function for generating simulated survey data using multi-observer methods, version 1.2.1
+# Function for generating simulated survey data using multi-observer methods, version 1.2.2
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code for generating simulated survey data for multi-observation method (MOM) and single-observation method (SOM) models. Accepts user-specified inputs for simulation analyses, returns list with 4 elements: 1) formatted simulated survey data, tables of key values (if applicable) for 2) observed groups and 3) binned covariate values, and 4) true values for mean overall true species probabilities and classification probabilities (if applicable). Code developed and tested in R version 4.1.
@@ -869,7 +869,8 @@ if ((sim$Model == "M.psi" |
      sim$Model == "M.theta+psi") &
     !exists("unmodeled.covariate", inherits = FALSE)) {
   
-  settransform(data.obs, "covariate_psi" = covariate_psi[1:r[[1]]])
+  add_vars(data.obs) <-
+    list("covariate_psi" = covariate_psi[1:r[[1]]])
   
 } else if ((exists("unmodeled.covariate", inherits = FALSE)) &
            any(colnames(data.obs) == "covariate_theta")) {
@@ -879,9 +880,10 @@ if ((sim$Model == "M.psi" |
 }
 
 # Add 'group_size' with total size of each true group, id' indexing simulation replicates
-settransform(data.obs, 
-             group_size = rowsums(qM(get_vars(data.obs, 1:A))), 
-             id = rep(1:reps, n.ps[1]))
+
+add_vars(data.obs) <-
+  list(group_size = rowsums(qM(get_vars(data.obs, 1:A))),
+       id = rep(1:reps, n.ps[1]))
 
 # Format simulated observations for statistical analyses (see format.MOM.data.f in 'supplemental_functions.R'), and return formatted simulated survey data
 dat <- format.MOM.data.f(data.obs, 

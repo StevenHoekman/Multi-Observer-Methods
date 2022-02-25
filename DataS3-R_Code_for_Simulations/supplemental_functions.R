@@ -1,5 +1,5 @@
 # Supplemental_functions.R
-# Supplemental functions for analyses and summaries, version 1.2.3
+# Supplemental functions for analyses and summaries, version 1.2.4
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # R computer code with supplemental functions for simulation analyses for estimating uncertain identification using multi-observer methods. These functions provide supplemental services such as: drawing random samples from probability distributions; computing probabilities and other values used in likelihood computations; and generating, formatting, summarizing, and error-checking simulation data and statistical output. Functions are grouped according by purpose. Comments with each function describe its purpose, inputs and outputs, and functioning of the code. Code developed and tested in R version 4.1.
@@ -795,9 +795,12 @@ format.MOM.data.f <- function(data.obs, A, O_ps, mix, n_bins) {
     
   }else{
     
-    settransform(tmp[[2]], 
-                 B_states = rep(B, dim(tmp[[2]])[1]),
-                 sum = as.integer(rowsums( qM(tmp[[2]][, 1:A]) )))
+    add_vars(tmp[[2]]) <-
+      list(
+        B_states = rep(B, dim(tmp[[2]])[1]),
+        sum = as.integer(rowsums( qM(tmp[[2]][, 1:A]) ))
+      )
+    
   }
   
   # For models with covariate predicting true species probabilities, add key value for unique covariate values across all simulation replicates 
@@ -1074,7 +1077,7 @@ psi.est.f <- function(par, dat, n_parameters) {
         ftransform(., 
                    psi.1 = count * mlogit.regress.predict.f(covariate_psi , par[1:2])[, 1]) %>%
         fselect(., psi.1, count) %>%
-        fsum(., , drop = FALSE) %>%
+        fsum(., drop = FALSE) %>%
         fcompute(., 
                  psi.1 = psi.1 / count,
                  psi.2 = 1 - (psi.1 / count))
@@ -1100,7 +1103,7 @@ psi.est.f <- function(par, dat, n_parameters) {
                  prob.g.1 = (delta.1 / (delta.1 + delta.2)) * count, 
                  prob.g.2 = (delta.2 / (delta.1 + delta.2)) * count
         ) %>% 
-        fmean(., , drop = FALSE) %>%
+        fmean(., drop = FALSE) %>%
         fcompute(., 
                  psi.1 = prob.g.1 * par.g[1] / (prob.g.1 * par.g[1] + prob.g.2 * par.g[2] ),
                  psi.2 = 1 - (prob.g.1 * par.g[1] / (prob.g.1 * par.g[1] + prob.g.2 * par.g[2]) ))
@@ -1135,7 +1138,7 @@ psi.est.f <- function(par, dat, n_parameters) {
                  prob.g.2 = ((prob.g.2 - prob.g.3) / (1 - prob.g.3)) * count,
                  prob.g.3 = (prob.g.3 / (1 - prob.g.3)) * count
         ) %>%
-        fmean(., , drop = FALSE) %>%
+        fmean(., drop = FALSE) %>%
         fcompute(., 
                  psi.1 = ( prob.g.1 * par.g[1] + prob.g.3 * par.g[1] )  / 
                    ( prob.g.1 * par.g[1] + prob.g.2 * par.g[2] + prob.g.3 * sum(par.g) ),
