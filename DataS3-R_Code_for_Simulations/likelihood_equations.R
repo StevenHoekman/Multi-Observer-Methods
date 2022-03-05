@@ -1,5 +1,5 @@
 # likelihood_equations.R
-# Generates R list objects with pre-computed values for likelihood equations, version 1.2.3
+# Generates R list objects with pre-computed values for likelihood equations, version 1.2.4
 # Steven T. Hoekman, Wild Ginger Consulting, PO Box 182 Langley, WA 98260, steven.hoekman@protonmail.com
 
 # This code generates list objects 'likelihood_equations' composed of three types of elements: 1) 'true.combinations.g.[size]' containing a matrix with possible combinations of true groups for groups of each [size], 2) 'true.permutations.count.g.[size]' containing a vector with counts of possible permutations for each combination for a group true group of each [size], and 3) 'observed.[observed group]' containing a matrix summarizing equations for computing probabilities of the [observed group] specified by counts of individuals classified to each true species state. These lists substantially increase speed of model optimization. Required lists for conducting simulation study described in the companion article and MetadataS3 are provided in DataS2. Code below produces these lists to user specifications for the number of observation states (A), number of true species states (B), and the range of group sizes (g). See MetadataS3.pdf in for addition details. Code developed and tested in R version 4.1.
@@ -77,11 +77,10 @@ terms.f <- function(s , A.cmbn, B.cmbn, B.ct){
         sum(y == z), integer(1))))
   
   matrix(c(rep(s, dim(X)[1]),
-           as.integer(
              apply(X, 1, function(y)
                factorial(g) / prod(factorial(y)))
              / list.new[[paste0("true.permutations.count.g.", g, collapse = ".")]][s]
-           ),
+           ,
            X),
          ncol = dim(X)[2] + 2) %>%
     setColnames(c("index", "coefficient", names.vec))
@@ -167,8 +166,22 @@ names(true.permutations.count) <-
 # These vectors are one-dimensional representations of matrices having B rows for true species states and A columns for observation states, with the cell on row b and column a representing the count of individuals of true species state b classified to observation state a. (This matrix arrangement can be visualized using Tables 1 and 2 in the companion article) Storing these matrices in a vector (starting from the top-left cell and moving left to right along each row to finish at the bottom-right cell) increases computational efficiency. 
 
 t.start <- unclass(Sys.time()) # For recording duration of list generation
-list.new <- c(true.combinations, true.permutations.count) # list.new will contain the generated list
-names.vec <- unlist(lapply(1:A, function(x) paste0(x, "." , 1:B)))
+names.vec <- unlist(lapply(1:A, function(x)
+  paste0(x, "." , 1:B)))
+
+observed.0 <-
+  matrix(c(1L, 1L, rep(0L, A * B)), nrow = 1) %>%
+  setColnames(c("index", "coefficient", names.vec)) %>%
+  list(.) %>%
+  setColnames(paste0("observed.", paste0(rep(0, A), collapse = ".")))
+
+true.permutations.count.g.0 <- 1L %>%
+  list(.) %>%
+  setColnames("true.permutations.count.g.0")
+
+list.new <- 
+  c(true.combinations, true.permutations.count.g.0, true.permutations.count, observed.0) # list.new will contain the generated list
+
 ndex <- 1 # 'ndex' indexes the group size g from 1 to the (upper limit - lower limit)
 
 for (g in g.limits[1]:g.limits[2]) { # Loop for group size
@@ -197,6 +210,13 @@ for (g in g.limits[1]:g.limits[2]) { # Loop for group size
         )
     }
   
+  # Set storage mode to "integer" if coefficient values don't exceed numeric limit of 2e10^9
+  
+  for (q in seq_along(output)) {
+    if (max(output[[q]]) < 2.1e9)
+      storage.mode(output[[q]]) <- "integer"
+  }
+  
   # Name each list element by the count of individuals in each observation state 1 to A (separated by a decimal), append 'output' to the new list
   names(output) <- sapply(1:o.states, function(x)
     paste0("observed.", paste0(observed.combinations.count[[ndex]][x,], collapse = ".")))
@@ -216,8 +236,10 @@ cat("Total duration (m): ", round((unclass(Sys.time()) - t.start)/60, 2), "\n")
 # Rename the new list and save. Lists can also be joined. 
 likelihood.equations <- list.new
 
-# Separate lists with the same number of true species states and observation states, but differing ranges of group sizes, may be merged. 
-# likelihood.equations <- c(likelihood.equations, list.new)
+# Separate lists with the same number of true species states and observation states may be merged. 
+# 'duplicate_entries' removes identical entries from the new list
+# duplicate_entries <- duplicated(c(likelihood.equations, list.new))
+# likelihood.equations <-c(likelihood.equations, list.new)[!duplicate_entries]
 
 # Save the list for future use
 save(likelihood.equations, file = "likelihood_equations_a2b2g5.RData")
